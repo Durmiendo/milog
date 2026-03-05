@@ -20,7 +20,7 @@ const translateSidebar = (items) => {
 
 export default defineConfig({
   title: "MiLog",
-  base: "/milog.github.io/",
+  base: "/milog/",
   cleanUrls: true,
   vite: {
     ssr: {
