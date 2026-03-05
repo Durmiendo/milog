@@ -36,96 +36,80 @@
     </svg>
 
     <ClientOnly>
-      <LogicElement
-          :index="''"
-          :title="'Settings'"
-          :color="'#8c6bed'"
-          :control=false
-      >
-        <div class="params-row">
-
-          <div class="param-box">
-            <span class="param-label">ips:</span>
-            <input
-                type="number"
-                v-model.number="settings.ips"
-                class="param-input"
-                style="border-bottom-color: #8c6bed"
-            />
+      <div class="element-wrapper">
+        <LogicElement
+            :index="''"
+            :title="'Settings'"
+            :color="'#8c6bed'"
+            :control="false"
+        >
+          <div class="params-row">
+            <div class="param-box">
+              <span class="param-label">ips:</span>
+              <input type="number" v-model.number="settings.ips" class="param-input" style="border-bottom-color: #8c6bed" />
+            </div>
+            <div class="param-box">
+              <span class="param-label">max_lines:</span>
+              <input type="number" v-model.number="settings.max_lines" class="param-input" style="border-bottom-color: #8c6bed" />
+            </div>
+            <div class="param-box">
+              <span class="param-label">max_jumpes:</span>
+              <input type="number" v-model.number="settings.max_jumpes" class="param-input" style="border-bottom-color: #8c6bed" />
+            </div>
+            <div class="param-box">
+              <button class="btn-reset" @click="resetSettings">reset</button>
+            </div>
+            <div class="param-box">
+              <button class="btn-reset" @click="copySelectedToClipboard">to buffer</button>
+            </div>
+            <div class="param-box">
+              <button class="btn-reset" @click="pasteFromClipboard()">from buffer</button>
+            </div>
+            <div class="param-box">
+              <button class="btn-reset" @click="clearAll">clear</button>
+            </div>
           </div>
-
-          <div class="param-box">
-            <span class="param-label">max_lines:</span>
-            <input
-                type="number"
-                v-model.number="settings.max_lines"
-                class="param-input"
-                style="border-bottom-color: #8c6bed"
-            />
-          </div>
-
-          <div class="param-box">
-            <span class="param-label">max_jumpes:</span>
-            <input
-                type="number"
-                v-model.number="settings.max_jumpes"
-                class="param-input"
-                style="border-bottom-color: #8c6bed"
-            />
-          </div>
-
-          <div class="param-box">
-            <button class="btn-reset" @click="resetSettings">reset</button>
-          </div>
-
-          <div class="param-box">
-            <button class="btn-reset" @click="copySelectedToClipboard">to buffer</button>
-          </div>
-
-          <div class="param-box">
-            <button class="btn-reset" @click="pasteFromClipboard()">from buffer</button>
-          </div>
-
-          <div class="param-box">
-            <button class="btn-reset" @click="clearAll">clear</button>
-          </div>
-        </div>
-      </LogicElement>
-      <LogicElement
-          :index="''"
-          :title="'Control'"
-          :color="'#8c6bed'"
-          :control="false"
-      >
-        <div class="params-row">
-          <div class="param-box">
-            <button class="btn-reset" @click="next(false)">run</button>
-          </div>
-
-          <div class="param-box">
-            <button
-                class="btn-reset"
-                :class="{ 'btn-auto-active': isAutoRunning }"
-                @click="toggleAuto"
-            >
-              {{ isAutoRunning ? 'stop' : 'auto' }}
-            </button>
-          </div>
-
-          <div class="param-box">
-            <button class="btn-reset" @click="showVars = true">vars</button>
-          </div>
-
-          <div class="param-box">
-            <button class="btn-reset" @click="goToCurrent">go to</button>
-          </div>
-        </div>
-      </LogicElement>
-      <div v-if="items.length > 0" class="insert-zone-static" @click="openAddMenu(0)">
-        <div class="insert-line"></div>
-        <button class="insert-btn">+</button>
+        </LogicElement>
       </div>
-      <draggable
+
+      <!-- Оборачиваем Control -->
+      <div class="element-wrapper">
+        <LogicElement
+            :index="''"
+            :title="'Control'"
+            :color="'#8c6bed'"
+            :control="false"
+        >
+          <div class="params-row">
+            <div class="param-box">
+              <button class="btn-reset" @click="next(false)">run</button>
+            </div>
+            <div class="param-box">
+              <button class="btn-reset" :class="{ 'btn-auto-active': isAutoRunning }" @click="toggleAuto">
+                {{ isAutoRunning ? 'stop' : 'auto' }}
+              </button>
+            </div>
+            <div class="param-box">
+              <button class="btn-reset" @click="showVars = true">vars</button>
+            </div>
+            <div class="param-box">
+              <button class="btn-reset" @click="goToCurrent">go to</button>
+            </div>
+          </div>
+        </LogicElement>
+
+        <!-- Теперь кнопка добавления использует стандартный insert-zone и позиционируется абсолютно (не сдвигая код при скрытии) -->
+        <div v-if="items.length > 0" class="insert-zone" @click.stop="openAddMenu(0)">
+          <div class="insert-line"></div>
+          <button class="insert-btn">+</button>
+        </div>
+        <div v-if="items.length > 0" class="insert-zone" @click.stop="openAddMenu(0)">
+          <div class="insert-line"></div>
+          <button class="insert-btn">+</button>
+        </div>
+      </div>
+
+  <draggable
           v-model="items"
           handle=".header"
           item-key="id"
@@ -1195,5 +1179,37 @@ onUnmounted(() => {
   border: 3px solid #1a1a1a;
   z-index: 20;
   box-shadow: 0 4px 8px rgba(0,0,0,0.5);
+}
+
+.insert-zone {
+  position: absolute;
+  left: 0;
+  width: 100%;
+  height: 20px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  opacity: 0;
+  z-index: 45;
+  cursor: pointer;
+  transition: opacity 0.2s;
+  bottom: -14px;
+}
+
+.is-dragging .insert-zone,
+.is-arrow-dragging .insert-zone {
+  display: none;
+}
+
+.insert-zone:hover {
+  opacity: 1;
+}
+
+.insert-line {
+  position: absolute;
+  width: 100%;
+  height: 2px;
+  background-color: #8c6bed;
+  z-index: 1;
 }
 </style>

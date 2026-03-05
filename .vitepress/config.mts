@@ -21,6 +21,7 @@ const translateSidebar = (items) => {
 export default defineConfig({
   title: "MiLog",
   base: "/milog.github.io/",
+  cleanUrls: true,
   vite: {
     ssr: {
       noExternal: ['vuedraggable']
@@ -36,8 +37,8 @@ export default defineConfig({
     },
     nav: [
       { text: 'Главная', link: '/' },
-      { text: 'Начало', link: '/index' },
-      { text: 'Песочница', link: '/none/sandbox' }
+      // { text: 'Начало', link: '/' },
+      { text: 'Песочница', link: '/none/sandbox.md' }
     ],
     editLink: {
       pattern: 'https://github.com/user/repo/edit/main/:path',
