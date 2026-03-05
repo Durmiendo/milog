@@ -255,7 +255,7 @@
 
 <script setup>
 import { triggerRef, ref, shallowRef, computed, onMounted, nextTick, onUnmounted, watch, reactive } from 'vue'
-import draggable from 'vuedraggable'
+const draggable = defineAsyncComponent(() => import('vuedraggable'))
 import LogicElement from './LogicElement.vue'
 import { cats, all } from './sttms.js';
 import { Asm } from './asm.js';

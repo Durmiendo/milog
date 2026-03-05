@@ -44,4 +44,4 @@ export default defineConfig({
       text: 'Редактировать эту страницу'
     }
   }
-})
+});
