@@ -43,7 +43,7 @@
             :color="'#8c6bed'"
             :control="false"
         >
-          <div class="params-row">
+          <div class="params-row" @copy.stop>
             <div class="param-box">
               <span class="param-label">ips:</span>
               <input type="number" v-model.number="settings.ips" class="param-input" style="border-bottom-color: #8c6bed" />
@@ -68,11 +68,13 @@
             <div class="param-box">
               <button class="btn-reset" @click="clearAll">clear</button>
             </div>
+            <div class="param-box">
+              <button class="btn-reset" @click="showMocks = true">add block</button>
+            </div>
           </div>
         </LogicElement>
       </div>
 
-      <!-- Оборачиваем Control -->
       <div class="element-wrapper">
         <LogicElement
             :index="''"
@@ -80,7 +82,7 @@
             :color="'#8c6bed'"
             :control="false"
         >
-          <div class="params-row">
+          <div class="params-row" @copy.stop>
             <div class="param-box">
               <button class="btn-reset" @click="next(false)">run</button>
             </div>
@@ -93,12 +95,14 @@
               <button class="btn-reset" @click="showVars = true">vars</button>
             </div>
             <div class="param-box">
+              <button class="btn-reset" @click="showMocks = true">mocks</button>
+            </div>
+            <div class="param-box">
               <button class="btn-reset" @click="goToCurrent">go to</button>
             </div>
           </div>
         </LogicElement>
 
-        <!-- Теперь кнопка добавления использует стандартный insert-zone и позиционируется абсолютно (не сдвигая код при скрытии) -->
         <div v-if="items.length > 0" class="insert-zone" @click.stop="openAddMenu(0)">
           <div class="insert-line"></div>
           <button class="insert-btn">+</button>
@@ -109,7 +113,7 @@
         </div>
       </div>
 
-  <draggable
+      <draggable
           v-model="items"
           handle=".header"
           item-key="id"
@@ -156,7 +160,7 @@
                   'is-selected-block': selectedIds.has(element.id)
                 }"
             >
-              <div class="params-row">
+              <div class="params-row" @copy.stop>
                 <div v-if="element.command === 'jump'" class="param-box">
                   <span class="param-label">dest:</span>
                   <input
@@ -224,6 +228,11 @@
       <div v-if="showVars" class="vars-fullscreen-overlay">
         <Vars :asm="asm" @close="showVars = false" />
       </div>
+
+      <div v-if="showMocks" class="vars-fullscreen-overlay" style="overflow-y: auto;" @click.self="showMocks = false">
+        <Mock :world="world" @close="showMocks = false" />
+      </div>
+
       <div v-if="showAddMenu" class="vars-fullscreen-overlay" @click.self="showAddMenu = false">
         <Add @select="handleAddCommand" @close="showAddMenu = false" />
       </div>
@@ -245,12 +254,19 @@ import { cats, all } from './sttms.js';
 import { Asm } from './asm.js';
 import Vars from './Vars.vue';
 import Add from './Add.vue';
+
+import { World } from './mock.js';
 import { Parser } from "./parser.js";
+import Mock from "./Mock.vue";
 
 const showAddMenu = ref(false);
+const showMocks = ref(false);
 const insertIndex = ref(-1);
 
+
 const asm = shallowRef(new Asm());
+const world = reactive(asm.value.world);
+
 const containerRef = ref(null);
 const items = ref([]);
 const itemRefs = new Map();
@@ -271,7 +287,7 @@ let lastSelectedId = null;
 const primaryDragId = ref(null);
 
 let isMultiDrag = false;
-let selectedItemsOrderOnDragStart = [];
+let selectedItemsOrderOnDragStart =[];
 let justDropped = false;
 
 const multiDragImageRef = ref(null);
@@ -369,7 +385,7 @@ const pasteFromClipboard = async (targetIndex = -1) => {
 
 const clearAll = () => {
   if (confirm('Вы уверены, что хотите очистить весь холст?')) {
-    items.value = [];
+    items.value =[];
     selectedIds.value.clear();
     nextTick(onListChange);
   }
@@ -410,7 +426,7 @@ const openAddMenu = (index) => {
 };
 
 const handleAddCommand = (commandName) => {
-  const newItem = createNewElement(commandName, []);
+  const newItem = createNewElement(commandName,[]);
   items.value.splice(insertIndex.value, 0, newItem);
   showAddMenu.value = false;
   nextTick(onListChange);
@@ -483,7 +499,7 @@ watch(() => settings.ips, (newIps) => {
   }
 });
 
-const createNewElement = (cmd = 'set', args = []) => {
+const createNewElement = (cmd = 'set', args =[]) => {
   const p = new Parser("");
   return p.createItemObject(cmd, args);
 };
@@ -523,13 +539,13 @@ watch(items, (newItems) => {
 
 const arrowDrag = ref({
   isDragging: false,
-  sourceIds: [],
+  sourceIds:[],
   x: 0,
   y: 0,
   hoveredItemId: null
 });
 
-let blockRectsCache = [];
+let blockRectsCache =[];
 
 const setItemRef = (el, id) => {
   if (el) itemRefs.set(id, el);
@@ -619,9 +635,9 @@ const onArrowDragEnd = () => {
   }
 
   arrowDrag.value.isDragging = false;
-  arrowDrag.value.sourceIds = [];
+  arrowDrag.value.sourceIds =[];
   arrowDrag.value.hoveredItemId = null;
-  blockRectsCache = [];
+  blockRectsCache =[];
   updateLines();
 };
 
@@ -660,7 +676,7 @@ const updateLines = () => {
           groups.set(targetId, {
             targetId,
             targetIndex: targetId === '__dragging__' ? -1 : targetIndex,
-            sources: []
+            sources:[]
           });
         }
         groups.get(targetId).sources.push({ id: item.id, index });
@@ -668,7 +684,7 @@ const updateLines = () => {
     }
   });
 
-  const lanes = [];
+  const lanes =[];
   connectionPaths.value = Array.from(groups.values()).map(group => {
     const isDragGroup = group.targetId === '__dragging__';
     const firstSource = group.sources[0];
@@ -821,7 +837,6 @@ const onDragStart = (evt) => {
         primaryDragId.value = draggedElement.id;
         selectedItemsOrderOnDragStart = items.value.filter(i => selectedIds.value.has(i.id));
 
-        // Моментально прячем остальные блоки, чтобы они не болтались позади
         selectedIds.value.forEach(id => {
           if (id !== draggedElement.id) {
             const el = itemRefs.get(id);
@@ -852,7 +867,6 @@ const onDragStart = (evt) => {
 const onDragEnd = () => {
   isDragging.value = false;
 
-  // Возвращаем видимость всем перенесенным блокам
   selectedIds.value.forEach(id => {
     const el = itemRefs.get(id);
     if (el) el.style.display = '';
@@ -875,12 +889,14 @@ const removeItem = (id) => {
 }
 
 const addItem = (index) => {
-  const newItem = createNewElement('set', []);
+  const newItem = createNewElement('set',[]);
   items.value.splice(index + 1, 0, newItem);
   nextTick(onListChange);
 }
 
-const copyItem = (index) => {
+const copyItem = (index, event) => {
+  if (event instanceof Event) return;
+
   const source = items.value[index];
   const newItem = createNewElement(source.command, source.params.map(p => p.value));
   newItem.jumpDest = source.jumpDest;
@@ -942,7 +958,6 @@ onUnmounted(() => {
 .jump-line { transition: stroke 0.2s; }
 .element-wrapper { margin-bottom: 8px; position: relative; transition: opacity 0.2s; }
 
-/* Красивый призрак (оставляем его визуально блоком, не делая просто серым квадратом) */
 .ghost-item {
   opacity: 0.6 !important;
   filter: drop-shadow(0 0 5px rgba(140, 107, 237, 0.4));

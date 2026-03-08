@@ -13,110 +13,110 @@ set result 1000
 </pre>
 </Proc>
 
-[//]: # ()
-[//]: # (<Proc :drag="true">)
 
-[//]: # (<pre>)
+<Proc :drag="true">
 
-[//]: # (read result cell1 0)
+<pre>
 
-[//]: # (write result cell1 0)
+read result cell1 0
 
-[//]: # (draw clear 0 0 0 0 0 0)
+write result cell1 0
 
-[//]: # (print "frog")
+draw clear 0 0 0 0 0 0
 
-[//]: # (printchar 65)
+print "frog"
 
-[//]: # (format "frog")
+printchar 65
 
-[//]: # (drawflush display1)
+format "frog"
 
-[//]: # (printflush message1)
+drawflush display1
 
-[//]: # (getlink result 0)
+printflush message1
 
-[//]: # (control enabled block1 0 0 0 0)
+getlink result 0
 
-[//]: # (radar enemy any any distance turret1 1 result)
+control enabled block1 0 0 0 0
 
-[//]: # (sensor result block1 @copper)
+radar enemy any any distance turret1 1 result
 
-[//]: # (set result 0)
+sensor result block1 @copper
 
-[//]: # (op add result a b)
+set result 0
 
-[//]: # (select result notEqual x false a b)
+op add result a b
 
-[//]: # (lookup item result 0)
+select result notEqual x false a b
 
-[//]: # (packcolor result 1 0 0 1)
+lookup item result 0
 
-[//]: # (unpackcolor r g b a color)
+packcolor result 1 0 0 1
 
-[//]: # (wait 0.5)
+unpackcolor r g b a color
 
-[//]: # (stop)
+wait 0.5
 
-[//]: # (end)
+stop
 
-[//]: # (jump -1 notEqual x false)
+end
 
-[//]: # (ubind @poly)
+jump -1 notEqual x false
 
-[//]: # (ucontrol move 0 0 0 0 0)
+ubind @poly
 
-[//]: # (uradar enemy any any distance 0 1 result)
+ucontrol move 0 0 0 0 0
 
-[//]: # (ulocate building core true @copper outx outy found building)
+uradar enemy any any distance 0 1 result
 
-[//]: # (getblock block result 0 0)
+ulocate building core true @copper outx outy found building
 
-[//]: # (setblock block @air 0 0 @derelict 0)
+getblock block result 0 0
 
-[//]: # (spawn @dagger 10 10 90 @sharded result)
+setblock block @air 0 0 @derelict 0
 
-[//]: # (status false wet unit 10)
+spawn @dagger 10 10 90 @sharded result
 
-[//]: # (weathersense result @rain)
+status false wet unit 10
 
-[//]: # (weatherset @rain true)
+weathersense result @rain
 
-[//]: # (spawnwave 10 10 false)
+weatherset @rain true
 
-[//]: # (setrule waveSpacing 10 0 0 100 100)
+spawnwave 10 10 false
 
-[//]: # (message announce 3 @wait)
+setrule waveSpacing 10 0 0 100 100
 
-[//]: # (cutscene pan 100 100 0.06 0)
+message announce 3 @wait
 
-[//]: # (effect warn 0 0 2 %ffaaff )
+cutscene pan 100 100 0.06 0
 
-[//]: # (explosion @crux 0 0 5 50 true true false true)
+effect warn 0 0 2 %ffaaff 
 
-[//]: # (setrate 10)
+explosion @crux 0 0 5 50 true true false true
 
-[//]: # (fetch unit result @sharded 0 @conveyor)
+setrate 10
 
-[//]: # (sync var)
+fetch unit result @sharded 0 @conveyor
 
-[//]: # (getflag result "flag")
+sync var
 
-[//]: # (setflag "flag" true)
+getflag result "flag"
 
-[//]: # (setprop @copper block1 0)
+setflag "flag" true
 
-[//]: # (playsound false @sfx-pew 1 1 0 @thisx @thisy true)
+setprop @copper block1 0
 
-[//]: # (setmarker pos 0 0 0 0)
+playsound false @sfx-pew 1 1 0 @thisx @thisy true
 
-[//]: # (makemarker shape 0 0 0 true)
+setmarker pos 0 0 0 0
 
-[//]: # (localeprint "name")
+makemarker shape 0 0 0 true
 
-[//]: # (</pre>)
+localeprint "name"
 
-[//]: # (</Proc>)
+</pre>
+
+</Proc>
 
 Здесь начинается основной текст...
 

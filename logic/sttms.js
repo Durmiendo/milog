@@ -129,7 +129,7 @@ export const all = {
         {
             "name": "control",
             "params": [
-                { "type": "enum", "name": "type", "values": ["enabled"] },
+                { "type": "enum", "name": "type", "values": ["enabled", "shoot", "shootp", "config", "color"] },
                 { "type": "building", "name": "target", "values": ["block1"] },
                 { "type": "number", "name": "p1", "values": ["0"] },
                 { "type": "number", "name": "p2", "values": ["0"] },
@@ -141,10 +141,10 @@ export const all = {
         {
             "name": "radar",
             "params": [
-                { "type": "enum", "name": "target1", "values": ["enemy"] },
-                { "type": "enum", "name": "target2", "values": ["any"] },
-                { "type": "enum", "name": "target3", "values": ["any"] },
-                { "type": "enum", "name": "sort", "values": ["distance"] },
+                { "type": "enum", "name": "target1", "values": ["any", "enemy", "ally", "player", "attacker", "flying", "boss", "ground"] },
+                { "type": "enum", "name": "target2", "values": ["any", "enemy", "ally", "player", "attacker", "flying", "boss", "ground"] },
+                { "type": "enum", "name": "target3", "values": ["any", "enemy", "ally", "player", "attacker", "flying", "boss", "ground"] },
+                { "type": "enum", "name": "sort", "values": ["distance", "health", "shield", "armor", "maxHealth"] },
                 { "type": "building", "name": "radar", "values": ["turret1"] },
                 { "type": "number", "name": "sortOrder", "values": ["1"] },
                 { "type": "string", "name": "output", "values": ["result"] }
@@ -171,7 +171,13 @@ export const all = {
         {
             "name": "op",
             "params": [
-                { "type": "enum", "name": "op", "values": ["add"] },
+                { "type": "enum", "name": "op", "values": [
+                        "add", "sub", "mul", "div", "idiv", "mod", "emod", "pow",
+                        "equal", "notEqual", "land", "lessThan", "lessThanEq", "greaterThan", "greaterThanEq", "strictEqual",
+                        "shl", "shr", "ushr", "or", "and", "xor", "not",
+                        "max", "min", "angle", "angleDiff", "len", "noise", "abs", "sign", "log", "logn", "log10", "floor", "ceil", "round", "sqrt", "rand",
+                        "sin", "cos", "tan", "asin", "acos", "atan"
+                    ] },
                 { "type": "string", "name": "dest", "values": ["result"] },
                 { "type": "string", "name": "a", "values": ["a"] },
                 { "type": "string", "name": "b", "values": ["b"] }
@@ -182,7 +188,7 @@ export const all = {
             "name": "select",
             "params": [
                 { "type": "string", "name": "result", "values": ["result"] },
-                { "type": "enum", "name": "op", "values": ["notEqual"] },
+                { "type": "enum", "name": "op", "values": ["equal", "notEqual", "lessThan", "lessThanEq", "greaterThan", "greaterThanEq", "strictEqual", "always"] },
                 { "type": "string", "name": "comp0", "values": ["x"] },
                 { "type": "string", "name": "comp1", "values": ["false"] },
                 { "type": "string", "name": "a", "values": ["a"] },
@@ -205,7 +211,7 @@ export const all = {
         {
             "name": "lookup",
             "params": [
-                { "type": "enum", "name": "type", "values": ["item"] },
+                { "type": "enum", "name": "type", "values": ["block", "unit", "item", "liquid", "team"] },
                 { "type": "string", "name": "result", "values": ["result"] },
                 { "type": "number", "name": "id", "values": ["0"] }
             ],
@@ -241,7 +247,7 @@ export const all = {
         {
             "name": "jump",
             "params": [
-                { "type": "enum", "name": "op", "values": ["notEqual"] },
+                { "type": "enum", "name": "op", "values": ["equal", "notEqual", "lessThan", "lessThanEq", "greaterThan", "greaterThanEq", "strictEqual", "always"] },
                 { "type": "string", "name": "value", "values": ["x"] },
                 { "type": "string", "name": "compare", "values": ["false"] }
             ],
@@ -257,7 +263,11 @@ export const all = {
         {
             "name": "ucontrol",
             "params": [
-                { "type": "enum", "name": "type", "values": ["move"] },
+                { "type": "enum", "name": "type", "values": [
+                        "idle", "stop", "move", "approach", "pathfind", "autoPathfind", "boost",
+                        "target", "targetp", "itemDrop", "itemTake", "payDrop", "payTake", "payEnter",
+                        "mine", "flag", "build", "deconstruct", "getBlock", "within", "unbind"
+                    ] },
                 { "type": "number", "name": "p1", "values": ["0"] },
                 { "type": "number", "name": "p2", "values": ["0"] },
                 { "type": "number", "name": "p3", "values": ["0"] },
@@ -269,10 +279,10 @@ export const all = {
         {
             "name": "uradar",
             "params": [
-                { "type": "enum", "name": "target1", "values": ["enemy"] },
-                { "type": "enum", "name": "target2", "values": ["any"] },
-                { "type": "enum", "name": "target3", "values": ["any"] },
-                { "type": "enum", "name": "sort", "values": ["distance"] },
+                { "type": "enum", "name": "target1", "values": ["any", "enemy", "ally", "player", "attacker", "flying", "boss", "ground"] },
+                { "type": "enum", "name": "target2", "values": ["any", "enemy", "ally", "player", "attacker", "flying", "boss", "ground"] },
+                { "type": "enum", "name": "target3", "values": ["any", "enemy", "ally", "player", "attacker", "flying", "boss", "ground"] },
+                { "type": "enum", "name": "sort", "values": ["distance", "health", "shield", "armor", "maxHealth"] },
                 { "type": "string", "name": "radar", "values": ["0"] },
                 { "type": "number", "name": "sortOrder", "values": ["1"] },
                 { "type": "string", "name": "output", "values": ["result"] }
@@ -282,8 +292,8 @@ export const all = {
         {
             "name": "ulocate",
             "params": [
-                { "type": "enum", "name": "locate", "values": ["building"] },
-                { "type": "enum", "name": "flag", "values": ["core"] },
+                { "type": "enum", "name": "locate", "values": ["ore", "building", "spawn", "damaged"] },
+                { "type": "enum", "name": "flag", "values": ["core", "storage", "generator", "turret", "factory", "repair", "rally", "battery", "resupply", "reactor"] },
                 { "type": "string", "name": "enemy", "values": ["true"] },
                 { "type": "content", "name": "ore", "values": ["@copper"] },
                 { "type": "string", "name": "outX", "values": ["outx"] },
@@ -296,7 +306,7 @@ export const all = {
         {
             "name": "getblock",
             "params": [
-                { "type": "enum", "name": "layer", "values": ["block"] },
+                { "type": "enum", "name": "layer", "values": ["floor", "ore", "block", "building"]},
                 { "type": "string", "name": "result", "values": ["result"] },
                 { "type": "number", "name": "x", "values": ["0"] },
                 { "type": "number", "name": "y", "values": ["0"] }
@@ -306,7 +316,7 @@ export const all = {
         {
             "name": "setblock",
             "params": [
-                { "type": "enum", "name": "layer", "values": ["block"] },
+                { "type": "enum", "name": "layer", "values": ["floor", "ore", "block"] },
                 { "type": "content", "name": "block", "values": ["@air"] },
                 { "type": "number", "name": "x", "values": ["0"] },
                 { "type": "number", "name": "y", "values": ["0"] },
@@ -365,7 +375,13 @@ export const all = {
         {
             "name": "setrule",
             "params": [
-                { "type": "enum", "name": "rule", "values": ["waveSpacing"] },
+                { "type": "enum", "name": "rule", "values": [
+                        "currentWaveTime", "waveTimer", "waves", "wave", "waveSpacing", "waveSending", "attackMode",
+                        "enemyCoreBuildRadius", "dropZoneRadius", "unitCap", "mapArea", "lighting", "canGameOver",
+                        "ambientLight", "solarMultiplier", "dragMultiplier", "ban", "unban",
+                        "buildSpeed", "unitHealth", "unitBuildSpeed", "unitMineSpeed", "unitCost", "unitDamage",
+                        "blockHealth", "blockDamage", "rtsMinWeight", "rtsMinSquad"
+                    ] },
                 { "type": "number", "name": "value", "values": ["10"] },
                 { "type": "number", "name": "p1", "values": ["0"] },
                 { "type": "number", "name": "p2", "values": ["0"] },
@@ -377,7 +393,7 @@ export const all = {
         {
             "name": "message",
             "params": [
-                { "type": "enum", "name": "type", "values": ["announce"] },
+                { "type": "enum", "name": "type", "values": ["notify", "announce", "toast", "mission"] },
                 { "type": "number", "name": "duration", "values": ["3"] },
                 { "type": "string", "name": "outSuccess", "values": ["@wait"] }
             ],
@@ -386,7 +402,7 @@ export const all = {
         {
             "name": "cutscene",
             "params": [
-                { "type": "enum", "name": "action", "values": ["pan"] },
+                { "type": "enum", "name": "action", "values": ["pan", "zoom", "stop"] },
                 { "type": "number", "name": "p1", "values": ["100"] },
                 { "type": "number", "name": "p2", "values": ["100"] },
                 { "type": "number", "name": "p3", "values": ["0.06"] },
@@ -431,7 +447,7 @@ export const all = {
         {
             "name": "fetch",
             "params": [
-                { "type": "enum", "name": "type", "values": ["unit"] },
+                { "type": "enum", "name": "type","values": ["unit", "unitCount", "player", "playerCount", "core", "coreCount", "build", "buildCount"]},
                 { "type": "string", "name": "result", "values": ["result"] },
                 { "type": "content", "name": "team", "values": ["@sharded"] },
                 { "type": "number", "name": "index", "values": ["0"] },
@@ -497,7 +513,11 @@ export const all = {
         {
             "name": "setmarker",
             "params": [
-                { "type": "enum", "name": "type", "values": ["pos"] },
+                { "type": "enum", "name": "type", "values": [
+                        "remove", "world", "minimap", "autoscale", "pos", "endPos", "drawLayer", "color", "radius",
+                        "stroke", "outline", "rotation", "shape", "arc", "flushText", "fontSize", "textHeight",
+                        "textAlign", "lineAlign", "labelFlags", "texture", "textureSize", "posi", "uvi", "colori"
+                    ] },
                 { "type": "number", "name": "id", "values": ["0"] },
                 { "type": "number", "name": "p1", "values": ["0"] },
                 { "type": "number", "name": "p2", "values": ["0"] },

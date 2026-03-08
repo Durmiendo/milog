@@ -62,7 +62,8 @@ const displayVars = computed(() => {
 
   const allVars = Object.values(props.asm.vars);
 
-  const regularVars = allVars.filter(v => !v.constant);
+  // const regularVars = allVars.filter(v => !v.constant);
+  const regularVars = allVars.filter(v => true);
 
   const allowedSysNames = ['true', 'false', 'null'];
   const systemConsts = allVars.filter(v => {
