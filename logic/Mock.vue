@@ -589,6 +589,7 @@ const formatValue = (val) => {
   font-weight: bold;
 }
 
+
 .data-grid::-webkit-scrollbar { width: 10px; }
 .data-grid::-webkit-scrollbar-track { background: #000; border-left: 2px solid #333;}
 .data-grid::-webkit-scrollbar-thumb { background: #555; border: 2px solid #000; }

@@ -152,7 +152,7 @@
                 :color="element.category?.color || '#888'"
                 @remove="removeItem(element.id)"
                 @copy="copyItem(index)"
-                @add="addItem(index)"
+                @add="openAddMenu(index + 1)"
                 :class="{
                   'is-active': hoveredIndex === index || connectedIndices.has(index) || element.id === arrowDrag.hoveredItemId,
                   'is-drop-target': element.id === arrowDrag.hoveredItemId,
@@ -223,6 +223,20 @@
           </div>
         </template>
       </draggable>
+      <div class="element-wrapper">
+        <LogicElement
+            :index="''"
+            :title="'Add'"
+            :color="'#8c6bed'"
+            :control="false"
+        >
+
+          <div class="param-box" @click.stop="openAddMenu(items.length)">
+            <button class="btn-reset big-insert-btn" @click="openAddMenu(items.length)">+</button>
+          </div>
+
+        </LogicElement>
+      </div>
     </ClientOnly>
 
     <Teleport to="body">
@@ -251,12 +265,10 @@
 import { defineAsyncComponent, triggerRef, ref, shallowRef, computed, onMounted, nextTick, onUnmounted, watch, reactive } from 'vue'
 const draggable = defineAsyncComponent(() => import('vuedraggable'))
 import LogicElement from './LogicElement.vue'
-import { cats, all } from './sttms.js';
 import { Asm } from './asm.js';
 import Vars from './Vars.vue';
 import Add from './Add.vue';
 
-import { World } from './mock.js';
 import { Parser } from "./parser.js";
 import Mock from "./Mock.vue";
 
@@ -293,7 +305,7 @@ let justDropped = false;
 const multiDragImageRef = ref(null);
 
 const settings = reactive({
-  ips: 0.3,
+  ips: 5,
   max_lines: 1000,
   max_jumpes: 500
 });
@@ -1315,5 +1327,10 @@ onUnmounted(() => {
   height: 2px;
   background-color: #8c6bed;
   z-index: 1;
+}
+
+.big-insert-btn {
+  width: 100%;
+  height: 100%;
 }
 </style>
