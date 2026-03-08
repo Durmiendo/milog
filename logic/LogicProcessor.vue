@@ -14,7 +14,7 @@
           :d="path.d"
           fill="none"
           :stroke="activePathIds.has(i) || path.isDragging ? '#6335f8' : 'rgba(255,255,255,0.4)'"
-          :stroke-width="activePathIds.has(i) || path.isDragging ? 2 : 1.5"
+          :stroke-width="activePathIds.has(i) || path.isDragging ? 6 : 4"
           stroke-linejoin="round"
           class="jump-line"
       />
@@ -28,7 +28,7 @@
             @pointerdown.stop.prevent="startArrowDrag($event, path)"
         />
         <polygon
-            :points="`${path.endX},${path.endY} ${path.endX+10},${path.endY-5} ${path.endX+10},${path.endY+5}`"
+            :points="`${path.endX-8},${path.endY} ${path.endX+18},${path.endY-12} ${path.endX+18},${path.endY+12}`"
             :fill="activePathIds.has(i) || path.isDragging ? '#6335f8' : 'rgba(255,255,255,0.8)'"
             style="pointer-events: none;"
         />
@@ -132,9 +132,9 @@
               @mouseenter="hoveredIndex = index"
               @mouseleave="hoveredIndex = null"
               @click="toggleSelection($event, element)"
-              :style="{ zIndex: activePopup?.startsWith(element.id) ? 50 : (asm.current === index ? 40 : (hoveredIndex === index ? 30 : 2)) }"
+              :style="{ zIndex: activePopup?.startsWith(element.id) ? 50 : (activeExecutingIndex === index ? 40 : (hoveredIndex === index ? 30 : 2)) }"
           >
-            <div class="element-toolbar" v-if="asm.current === index">
+            <div class="element-toolbar" v-if="activeExecutingIndex === index">
               <button class="btn-next" @click.stop="next(true)">run</button>
               <button
                   @click.stop="toggleAuto"
@@ -147,7 +147,7 @@
 
             <LogicElement
                 :type="element"
-                :index="index"
+                :index="displayIndices[index]"
                 :title="element.command"
                 :color="element.category?.color || '#888'"
                 @remove="removeItem(element.id)"
@@ -156,16 +156,17 @@
                 :class="{
                   'is-active': hoveredIndex === index || connectedIndices.has(index) || element.id === arrowDrag.hoveredItemId,
                   'is-drop-target': element.id === arrowDrag.hoveredItemId,
-                  'is-executing': asm.current === index,
-                  'is-selected-block': selectedIds.has(element.id)
+                  'is-executing': activeExecutingIndex === index,
+                  'is-selected-block': selectedIds.has(element.id),
+                  'is-label': element.command === 'label'
                 }"
             >
               <div class="params-row" @copy.stop>
                 <div v-if="element.command === 'jump'" class="param-box">
                   <span class="param-label">dest:</span>
                   <input
-                      type="number"
-                      v-model.number="element.jumpDest"
+                      type="text"
+                      v-model="element.jumpDest"
                       class="param-input jump-dest-input"
                       @input="onJumpDestChange(element)"
                   />
@@ -263,7 +264,6 @@ const showAddMenu = ref(false);
 const showMocks = ref(false);
 const insertIndex = ref(-1);
 
-
 const asm = shallowRef(new Asm());
 const world = reactive(asm.value.world);
 
@@ -297,6 +297,56 @@ const settings = reactive({
   max_lines: 1000,
   max_jumpes: 500
 });
+
+
+const displayIndices = computed(() => {
+  let count = 0;
+  return items.value.map(item => {
+    if (item.command === 'label') return '';
+    return count++;
+  });
+});
+
+const activeExecutingIndex = computed(() => {
+  if (!items.value || items.value.length === 0) return -1;
+
+  const instance = asm.value;
+  let curr = instance.current;
+
+  if (curr === undefined || curr === null || curr < 0) curr = 0;
+
+  const maxLoops = items.value.length;
+  let looped = 0;
+
+  while (looped < maxLoops) {
+    if (curr >= items.value.length) curr = 0;
+
+    const block = items.value[curr];
+    if (block && block.command !== 'label') {
+      return curr;
+    }
+
+    curr++;
+    looped++;
+  }
+
+  return instance.current;
+});
+
+const onParamInput = (element, param) => {
+  if (element.command === 'label') {
+    items.value.forEach(it => {
+      if (it.command === 'jump') {
+        if (it._targetId === element.id) {
+          it.jumpDest = param.value;
+        } else if (String(it.jumpDest).trim() === param.value && !it._targetId) {
+          it._targetId = element.id;
+        }
+      }
+    });
+  }
+  updateLines();
+};
 
 const toggleSelection = (e, item) => {
   if (justDropped) return;
@@ -336,7 +386,8 @@ const copySelectedToClipboard = async () => {
   if (itemsToCopy.length === 0) return;
 
   const textToCopy = itemsToCopy.map(b => {
-    if (b.command === 'jump') return `jump ${b.jumpDest}`;
+    if (b.command === 'jump') return `jump ${b.jumpDest} ${b.params.map(p => p.value).join(' ')}`;
+    if (b.command === 'label') return `${b.params[0].value}:`;
     return `${b.command} ${b.params.map(p => p.value).join(' ')}`;
   }).join('\n');
 
@@ -349,6 +400,7 @@ const copySelectedToClipboard = async () => {
 
 const pasteFromClipboard = async (targetIndex = -1) => {
   try {
+    clearAll();
     const text = await navigator.clipboard.readText();
     if (!text.trim()) return;
 
@@ -363,6 +415,7 @@ const pasteFromClipboard = async (targetIndex = -1) => {
     if (targetIndex !== -1) {
       insertPos = targetIndex;
     } else if (selectedIds.value.size > 0) {
+
       let maxIdx = -1;
       items.value.forEach((item, idx) => {
         if (selectedIds.value.has(item.id) && idx > maxIdx) maxIdx = idx;
@@ -388,6 +441,7 @@ const clearAll = () => {
     items.value =[];
     selectedIds.value.clear();
     nextTick(onListChange);
+    updateLines();
   }
 };
 
@@ -433,7 +487,7 @@ const handleAddCommand = (commandName) => {
 };
 
 const goToCurrent = () => {
-  const currentIndex = asm.value.current;
+  const currentIndex = activeExecutingIndex.value;
   const currentItem = items.value[currentIndex];
   if (currentItem) {
     const el = itemRefs.get(currentItem.id);
@@ -511,7 +565,7 @@ const resetSettings = () => {
 };
 
 const next = async (shouldScroll = false) => {
-  const oldIndex = asm.value.current;
+  const oldIndex = activeExecutingIndex.value;
   const oldItem = items.value[oldIndex];
   const oldEl = oldItem ? itemRefs.get(oldItem.id) : null;
 
@@ -521,7 +575,7 @@ const next = async (shouldScroll = false) => {
 
   if (!shouldScroll) return;
 
-  const newIndex = asm.value.current;
+  const newIndex = activeExecutingIndex.value;
   const newItem = items.value[newIndex];
   const newEl = newItem ? itemRefs.get(newItem.id) : null;
 
@@ -624,11 +678,17 @@ const onArrowDragEnd = () => {
 
   if (arrowDrag.value.hoveredItemId) {
     const targetIndex = items.value.findIndex(it => it.id === arrowDrag.value.hoveredItemId);
+    const targetItem = items.value[targetIndex];
+
     if (targetIndex !== -1) {
       items.value.forEach(item => {
         if (arrowDrag.value.sourceIds.includes(item.id)) {
           item._targetId = arrowDrag.value.hoveredItemId;
-          item.jumpDest = targetIndex;
+          if (targetItem.command === 'label') {
+            item.jumpDest = targetItem.params[0].value;
+          } else {
+            item.jumpDest = displayIndices.value[targetIndex];
+          }
         }
       });
     }
@@ -746,14 +806,29 @@ const updateLines = () => {
 }
 
 const onJumpDestChange = (item) => {
-  const idx = parseInt(item.jumpDest);
-  if (!isNaN(idx) && items.value[idx]) {
-    item._targetId = items.value[idx].id;
+  const destStr = String(item.jumpDest).trim();
+
+  const targetLabel = items.value.find(
+      it => it.command === 'label' && it.params[0].value === destStr
+  );
+
+  if (targetLabel) {
+    item._targetId = targetLabel.id;
   } else {
-    item._targetId = null;
+    const idx = parseInt(destStr);
+    if (!isNaN(idx)) {
+      const targetIndex = displayIndices.value.indexOf(idx);
+      if (targetIndex !== -1) {
+        item._targetId = items.value[targetIndex].id;
+      } else {
+        item._targetId = null;
+      }
+    } else {
+      item._targetId = null;
+    }
   }
   updateLines();
-}
+};
 
 const onListChange = (evt) => {
   if (evt && evt.moved && isMultiDrag) {
@@ -774,8 +849,17 @@ const onListChange = (evt) => {
 
   items.value.forEach((item) => {
     if (item.command === 'jump' && item._targetId) {
-      const currentIdx = items.value.findIndex(it => it.id === item._targetId);
-      item.jumpDest = currentIdx !== -1 ? currentIdx : item.jumpDest;
+      const currentTarget = items.value.find(it => it.id === item._targetId);
+      if (currentTarget) {
+        if (currentTarget.command === 'label') {
+          item.jumpDest = currentTarget.params[0].value;
+        } else {
+          const targetIndex = items.value.indexOf(currentTarget);
+          item.jumpDest = displayIndices.value[targetIndex];
+        }
+      } else {
+        item._targetId = null;
+      }
     }
   });
   updateLines();
@@ -1024,6 +1108,10 @@ onUnmounted(() => {
   outline-offset: 2px;
   background-color: rgba(140, 107, 237, 0.15) !important;
   border-radius: 6px;
+}
+
+:deep(.is-label) {
+  filter: saturate(0.5);
 }
 
 .params-row { display: flex; gap: 12px; flex-wrap: wrap; padding: 4px; }

@@ -113,18 +113,32 @@ export class Asm {
     }
 
     next() {
-        if (!this.code) return this.tick();
-        if (this.current < 0) this.current = 0;
-        if (this.current >= this.code.length) this.current = 0;
+        if (!this.code || this.code.length === 0) return this.tick();
 
-        const block = this.code[this.current];
-        if (!block) return this.tick();
+        let maxLoops = this.code.length;
+        let looped = 0;
 
-        let cmd = this.impl[block.command];
-        if (!cmd) return this.tick();
+        while (looped < maxLoops) {
+            if (this.current < 0) this.current = 0;
+            if (this.current >= this.code.length) this.current = 0;
 
-        const nxt = cmd(this, block);
-        this.tick(nxt);
+            const block = this.code[this.current];
+            if (!block) return this.tick();
+
+            if (block.command === 'label') {
+                this.tick();
+                looped++;
+                continue;
+            }
+
+            let cmd = this.impl[block.command];
+            if (!cmd) return this.tick();
+
+            const nxt = cmd(this, block);
+            return this.tick(nxt);
+        }
+
+        return this.tick();
     }
 
     tick(nxt) {
@@ -229,7 +243,13 @@ export class Asm {
         },
 
         jump: (vm, block) => {
-            const destIndex = block.jumpDest !== undefined ? parseInt(block.jumpDest, 10) : -1;
+            let destIndex = -1;
+
+            if (block._targetId) {
+                destIndex = vm.code.findIndex(b => b.id === block._targetId)+1;
+            } else if (block.jumpDest !== undefined && block.jumpDest !== null) {
+                destIndex = parseInt(block.jumpDest, 10);
+            }
 
             if (destIndex < 0 || destIndex >= vm.code.length) return;
 

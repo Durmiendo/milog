@@ -15,7 +15,16 @@ const groupedCommands = computed(() => {
   const query = searchQuery.value.toLowerCase().trim();
   const groups = {};
 
-  all.objs.forEach(cmd => {
+  const allObjs = [...all.objs];
+  if (!allObjs.find(o => o.name === 'label')) {
+    allObjs.push({
+      name: 'label',
+      category: 'control',
+      params: [{ name: 'name', type: 'string', values: ['l1'] }]
+    });
+  }
+
+  allObjs.forEach(cmd => {
     if (cmd.name.toLowerCase().includes(query)) {
       if (!groups[cmd.category]) {
         groups[cmd.category] = [];
@@ -27,7 +36,7 @@ const groupedCommands = computed(() => {
   return categoryOrder.map(catKey => ({
     key: catKey,
     meta: cats[catKey] || { name: 'Unknown', color: '#777777' },
-    commands: groups[catKey] || []
+    commands: groups[catKey] ||[]
   })).filter(group => group.commands.length > 0);
 });
 

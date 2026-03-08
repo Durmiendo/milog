@@ -11,9 +11,9 @@ export class Parser {
         this.chars = text || "";
         this.pos = 0;
         this.line = 0;
-        this.statements = [];
+        this.statements =[];
 
-        this.pendingJumps = [];
+        this.pendingJumps =[];
         this.jumpLocations = {};
 
         this.maxInstructions = 1000;
@@ -63,7 +63,7 @@ export class Parser {
     }
 
     statement() {
-        let tokens = [];
+        let tokens =[];
         let expectNext = false;
 
         while (this.pos < this.chars.length) {
@@ -103,6 +103,10 @@ export class Parser {
                     this.error("Too many jump locations");
                 }
                 this.jumpLocations[labelName] = this.line;
+
+                const item = this.createItemObject('label', [labelName]);
+                this.statements.push(item);
+                this.line++;
             } else {
                 let wasJumpLabel = false;
                 let jumpLabel = null;
@@ -143,18 +147,25 @@ export class Parser {
         }
 
         for (let j of this.pendingJumps) {
-            if (!(j.label in this.jumpLocations)) {
-                console.warn(`Undefined jump location: "${j.label}"`);
-                continue;
-            }
-            let targetLine = this.jumpLocations[j.label];
-            j.item.jumpDest = targetLine;
+            j.item.jumpDest = j.label;
         }
 
         this.statements.forEach(st => {
             if (st.command === 'jump' && st.jumpDest !== null) {
-                const target = this.statements[st.jumpDest];
-                if (target) st._targetId = target.id;
+                const destStr = String(st.jumpDest).trim();
+
+                const targetLabel = this.statements.find(
+                    i => i.command === 'label' && i.params[0].value === destStr
+                );
+
+                if (targetLabel) {
+                    st._targetId = targetLabel.id;
+                } else {
+                    const idx = parseInt(destStr);
+                    if (!isNaN(idx) && this.statements[idx]) {
+                        st._targetId = this.statements[idx].id;
+                    }
+                }
             }
         });
 
@@ -162,7 +173,16 @@ export class Parser {
     }
 
     createItemObject(cmd, args) {
-        const def = all.objs.find(o => o.name === cmd);
+        let def = all?.objs?.find(o => o.name === cmd);
+
+        if (cmd === 'label' && !def) {
+            def = {
+                name: 'label',
+                category: 'control',
+                params: [{ name: 'name', type: 'string', values: ['l1'] }]
+            };
+        }
+
         const isJump = cmd === 'jump';
         let jumpDest = isJump ? parseInt(args[0]) : null;
         let actualArgs = isJump ? args.slice(1) : args;
@@ -172,7 +192,7 @@ export class Parser {
             command: cmd,
             jumpDest: jumpDest,
             _targetId: null,
-            category: def ? cats[def.category] : cats.unknown,
+            category: def ? cats[def.category] : (cats?.unknown || { name: 'Unknown', color: '#888' }),
             params: def ? def.params.map((p, i) => ({
                 label: p.name,
                 value: actualArgs[i] !== undefined ? actualArgs[i] : (Array.isArray(p.values) ? p.values[0] : ""),
