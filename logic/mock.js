@@ -40,9 +40,11 @@ export class World {
     }
 
     blocks = {
-        'membank':[],
-        'processor':[],
+        'membank'      : [],
+        'processor'    : [],
         'logic_display': [],
+        'message'      : [],
+        'switch'       : [],
     }
 
     impl = {
@@ -232,5 +234,57 @@ export class World {
             }
         }),
 
+        message: () => ({
+            id: 0,
+            type: 'message',
+            name: 'message',
+            mock: { text: "" },
+
+            init(args = {}) {
+                Object.assign(this.mock, args);
+            },
+
+            flush(text) {
+                const str = String(text || "");
+                this.mock.text = str;
+                return `Отображено: ${str.length} симв.`;
+            }
+        }),
+
+        switch: () => ({
+            id: 0,
+            type: 'switch',
+            name: 'switch',
+            mock: { enabled: false },
+
+            init(args = {}) {
+                Object.assign(this.mock, args);
+                this.mock.enabled = !!this.mock.enabled;
+            },
+
+            toggle() {
+                const isEnabled = String(this.mock.enabled) === 'true' || this.mock.enabled === true || this.mock.enabled === '1';
+                this.mock.enabled = !isEnabled;
+                return this.mock.enabled;
+            },
+
+            sense(property) {
+                const prop = String(property).replace('@', '');
+                if (prop === 'enabled') {
+                    const isEnabled = String(this.mock.enabled) === 'true' || this.mock.enabled === true || this.mock.enabled === '1';
+                    return isEnabled ? 1 : 0;
+                }
+                return 0;
+            },
+
+            control(property, value) {
+                const prop = String(property).replace('@', '');
+                if (prop === 'enabled') {
+                    this.mock.enabled = Number(value) > 0;
+                    return this.mock.enabled;
+                }
+                return `Unknown prop: ${prop}`;
+            }
+        })
     }
 }

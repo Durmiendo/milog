@@ -3,7 +3,7 @@ import {World} from "./mock";
 export class Asm {
     world = undefined; // mock
     vars = {};
-    code = [];
+    code =[];
     current = 0;
     links = {};
     rawCode =[];
@@ -14,7 +14,7 @@ export class Asm {
     }
 
     init() {
-        this.rawCode = [];
+        this.rawCode =[];
         this.links = {};
 
         this.coldInit();
@@ -25,8 +25,7 @@ export class Asm {
     }
 
     coldInit() {
-        this.vars = {};
-        this.code = [];
+        this.code =[];
         this.current = 0;
     }
 
@@ -47,7 +46,7 @@ export class Asm {
         const selfBlock = this.world.addBlock('processor', { vm: this });
         this.putConst("@this", selfBlock);
 
-        this.counterVar = this.var("@counter")
+        this.counterVar = this.var("@counter");
 
         this.systemGlobals = new Set(Object.keys(this.vars));
     }
@@ -113,43 +112,54 @@ export class Asm {
     }
 
     next() {
-        if (!this.code || this.code.length === 0) return this.tick();
+        if (!this.code || this.code.length === 0) return;
 
         let maxLoops = this.code.length;
         let looped = 0;
 
         while (looped < maxLoops) {
-            if (this.current < 0) this.current = 0;
-            if (this.current >= this.code.length) this.current = 0;
+            let idx = Math.floor(this.counterVar.num());
 
-            const block = this.code[this.current];
-            if (!block) return this.tick();
+            if (idx < 0 || idx >= this.code.length) {
+                idx = 0;
+            }
+
+            const block = this.code[idx];
+
+            this.counterVar.setnum(idx + 1);
+
+            if (!block) {
+                this.current = Math.floor(this.counterVar.num());
+                return;
+            }
 
             if (block.command === 'label') {
-                this.tick();
                 looped++;
                 continue;
             }
 
             let cmd = this.impl[block.command];
-            if (!cmd) return this.tick();
+            if (!cmd) {
+                this.current = Math.floor(this.counterVar.num());
+                return;
+            }
 
             const nxt = cmd(this, block);
-            return this.tick(nxt);
+
+            if (nxt !== undefined && nxt !== null) {
+                this.counterVar.setnum(nxt);
+            }
+
+            this.current = Math.floor(this.counterVar.num());
+            return;
         }
 
-        return this.tick();
-    }
-
-    tick(nxt) {
-        // this.current = this.counterVar.num();
-        if (nxt === undefined || nxt === null) this.current = (this.current + 1) % this.code.length;
-        else this.current = nxt;
-        this.counterVar.setnum(this.current);
+        this.current = Math.floor(this.counterVar.num());
     }
 
     reset() {
         this.current = 0;
+        if (this.counterVar) this.counterVar.setnum(0);
     }
 
     putConst(name, value) {
@@ -238,15 +248,110 @@ export class Asm {
             if(!to.constant) to.set(from);
         },
 
+        op: (vm, block) => {
+            const opRaw = block.params[0];
+            const op = (typeof opRaw === 'object' && opRaw !== null) ? opRaw.value : opRaw;
+
+            const dest = block.resolvedParams[1];
+            const aVar = block.resolvedParams[2];
+            const bVar = block.resolvedParams[3];
+
+            if (!dest || dest.constant) return;
+
+            const a = aVar ? aVar.num() : 0;
+            const b = bVar ? bVar.num() : 0;
+
+            let res = 0;
+
+            const safeInt = (val) => {
+                if (!Number.isFinite(val)) return 0n;
+                return BigInt(Math.trunc(val));
+            };
+
+            switch (op) {
+                case "add" : res = a + b; break;
+                case "sub" : res = a - b; break;
+                case "mul" : res = a * b; break;
+                case "div" : res = a / b; break;
+                case "idiv": res = Math.floor(a / b); break;
+                case "mod" : res = a % b; break;
+                case "emod": res = ((a % b) + b) % b; break;
+                case "pow" : res = Math.pow(a, b); break;
+
+                case "equal":
+                    if (aVar && bVar && aVar.isobj && bVar.isobj) res = (aVar.objval === bVar.objval) ? 1 : 0;
+                    else res = Math.abs(a - b) < 0.000001 ? 1 : 0;
+                    break;
+                case "notEqual":
+                    if (aVar && bVar && aVar.isobj && bVar.isobj) res = (aVar.objval !== bVar.objval) ? 1 : 0;
+                    else res = Math.abs(a - b) >= 0.000001 ? 1 : 0;
+                    break;
+                case "strictEqual":
+                    res = (aVar && bVar && aVar.isobj === bVar.isobj && (aVar.isobj ? aVar.objval === bVar.objval : aVar.numval === bVar.numval)) ? 1 : 0;
+                    break;
+                case "land": res = (a !== 0 && b !== 0) ? 1 : 0; break;
+                case "lessThan": res = a < b ? 1 : 0; break;
+                case "lessThanEq": res = a <= b ? 1 : 0; break;
+                case "greaterThan": res = a > b ? 1 : 0; break;
+                case "greaterThanEq": res = a >= b ? 1 : 0; break;
+
+                case "shl"  : res = Number(safeInt(a) << safeInt(b)); break;
+                case "shr"  : res = Number(safeInt(a) >> safeInt(b)); break;
+                case "ushr" : res = Number(BigInt.asUintN(64, safeInt(a) >> safeInt(b))); break;
+                case "or"   : res = Number(safeInt(a) | safeInt(b)); break;
+                case "and"  :
+                case "b-and": res = Number(safeInt(a) & safeInt(b)); break;
+                case "xor"  : res = Number(safeInt(a) ^ safeInt(b)); break;
+                case "not"  :
+                case "flip" : res = Number(~safeInt(a)); break;
+
+                case "max"  : res = Math.max(a, b); break;
+                case "min"  : res = Math.min(a, b); break;
+                case "angle":
+                    res = Math.atan2(b, a) * (180 / Math.PI);
+                    if (res < 0) res += 360;
+                    break;
+                case "angleDiff":
+                    res = Math.abs((a - b) % 360);
+                    if (res > 180) res = 360 - res;
+                    break;
+                case "len"  : res = Math.hypot(a, b); break;
+                case "noise":
+                    res = Math.sin(a * 12.9898 + b * 78.233) * 43758.5453;
+                    res = res - Math.floor(res);
+                    break;
+                case "abs"  : res = Math.abs(a); break;
+                case "sign" : res = Math.sign(a); break;
+                case "log"  : res = Math.log(a); break;
+                case "logn" : res = Math.log(a) / Math.log(b); break;
+                case "log10": res = Math.log10(a); break;
+                case "floor": res = Math.floor(a); break;
+                case "ceil" : res = Math.ceil(a); break;
+                case "round": res = Math.round(a); break;
+                case "sqrt" : res = Math.sqrt(a); break;
+                case "rand" : res = Math.random() * a; break;
+                case "sin"  : res = Math.sin(a * (Math.PI / 180)); break;
+                case "cos"  : res = Math.cos(a * (Math.PI / 180)); break;
+                case "tan"  : res = Math.tan(a * (Math.PI / 180)); break;
+                case "asin" : res = Math.asin(a) * (180 / Math.PI); break;
+                case "acos" : res = Math.acos(a) * (180 / Math.PI); break;
+                case "atan" : res = Math.atan(a) * (180 / Math.PI); break;
+
+                default: res = 0; break;
+            }
+
+            dest.setnum(res);
+        },
+
         end: (vm, block) => {
-            vm.current = -1;
+            return 0;
         },
 
         jump: (vm, block) => {
             let destIndex = -1;
 
             if (block._targetId) {
-                destIndex = vm.code.findIndex(b => b.id === block._targetId)+1;
+                destIndex = vm.code.findIndex(b => b.id === block._targetId);
             } else if (block.jumpDest !== undefined && block.jumpDest !== null) {
                 destIndex = parseInt(block.jumpDest, 10);
             }
@@ -363,8 +468,172 @@ export class Asm {
                 displayObj.flush(vm.drawBuffer ||[]);
             }
 
-            vm.drawBuffer = [];
-        }
+            vm.drawBuffer =[];
+        },
+
+        print: (vm, block) => {
+            if (vm.textBuffer === undefined) vm.textBuffer = "";
+
+            const valVar = block.resolvedParams[0];
+            let strVal = "";
+
+            if (valVar.isobj) {
+                strVal = valVar.objval !== null ? String(valVar.objval) : "null";
+            } else {
+                const val = valVar.numval;
+                if (Math.abs(val - Math.round(val)) < 0.00001) {
+                    strVal = String(Math.round(val));
+                } else {
+                    strVal = String(val);
+                }
+            }
+
+            vm.textBuffer += strVal;
+        },
+
+        printflush: (vm, block) => {
+            const targetVar = block.resolvedParams[0];
+            const targetObj = targetVar?.obj();
+
+            if (targetObj && typeof targetObj.flush === 'function') {
+                targetObj.flush(vm.textBuffer || "");
+            }
+
+            vm.textBuffer = "";
+        },
+
+        sensor: (vm, block) => {
+            const toVar = block.resolvedParams[0];
+            const fromVar = block.resolvedParams[1];
+            const propVar = block.resolvedParams[2];
+
+            const targetObj = fromVar?.obj();
+
+            const propName = propVar?.isobj && typeof propVar.objval === 'string'
+                ? propVar.objval
+                : propVar?.name;
+
+            if (targetObj && typeof targetObj.sense === 'function') {
+                toVar.setnum(targetObj.sense(propName));
+            } else {
+                toVar.setnum(0);
+            }
+        },
+
+        control: (vm, block) => {
+            const propRaw = block.params[0];
+            const propName = (typeof propRaw === 'object' && propRaw !== null) ? propRaw.value : propRaw;
+
+            const targetVar = block.resolvedParams[1];
+            const p1Var = block.resolvedParams[2];
+
+            const targetObj = targetVar?.obj();
+
+            if (targetObj && typeof targetObj.control === 'function') {
+                targetObj.control(propName, p1Var?.num());
+            }
+        },
+
+        getlink: (vm, block) => {
+            const outVar = block.resolvedParams[0];
+            const indexVar = block.resolvedParams[1];
+
+            const index = Math.floor(indexVar.num());
+            const linkValues = Object.values(vm.links);
+
+            if (index >= 0 && index < linkValues.length) {
+                outVar.setobj(linkValues[index]);
+            } else {
+                outVar.setobj(null);
+            }
+        },
+
+        printchar: (vm, block) => {
+            if (vm.textBuffer === undefined) vm.textBuffer = "";
+            const valVar = block.resolvedParams[0];
+
+            const charCode = Math.floor(valVar.num());
+            if (charCode > 0) {
+                vm.textBuffer += String.fromCharCode(charCode);
+            }
+        },
+
+        format: (vm, block) => {
+            if (vm.textBuffer === undefined) vm.textBuffer = "";
+            const valVar = block.resolvedParams[0];
+
+            let strVal = "";
+            if (valVar.isobj) {
+                strVal = valVar.objval !== null ? String(valVar.objval) : "null";
+            } else {
+                const val = valVar.numval;
+                if (Math.abs(val - Math.round(val)) < 0.00001) {
+                    strVal = String(Math.round(val));
+                } else {
+                    strVal = String(val);
+                }
+            }
+
+            let bestIndex = -1;
+            let bestNum = 10;
+
+            for (let i = 0; i < vm.textBuffer.length - 2; i++) {
+                if (vm.textBuffer[i] === '{' && vm.textBuffer[i + 2] === '}') {
+                    const code = vm.textBuffer.charCodeAt(i + 1);
+                    if (code >= 48 && code <= 57) {
+                        const num = code - 48;
+                        if (num < bestNum) {
+                            bestNum = num;
+                            bestIndex = i;
+                        }
+                    }
+                }
+            }
+
+            if (bestIndex !== -1) {
+                vm.textBuffer =
+                    vm.textBuffer.substring(0, bestIndex) +
+                    strVal +
+                    vm.textBuffer.substring(bestIndex + 3);
+            }
+        },
+
+        packcolor: (vm, block) => {
+            const resultVar = block.resolvedParams[0];
+            const rVar = block.resolvedParams[1];
+            const gVar = block.resolvedParams[2];
+            const bVar = block.resolvedParams[3];
+            const aVar = block.resolvedParams[4];
+
+            const clamp = (v) => Math.max(0, Math.min(1, v));
+            const r = clamp(rVar.numf());
+            const g = clamp(gVar.numf());
+            const b = clamp(bVar.numf());
+            const a = clamp(aVar.numf());
+
+            const packed =
+                ((Math.round(r * 255) & 0xFF) << 24) |
+                ((Math.round(g * 255) & 0xFF) << 16) |
+                ((Math.round(b * 255) & 0xFF) << 8) |
+                ((Math.round(a * 255) & 0xFF));
+
+            resultVar.setnum(packed >>> 0);
+        },
+
+        unpackcolor: (vm, block) => {
+            const rVar = block.resolvedParams[0];
+            const gVar = block.resolvedParams[1];
+            const bVar = block.resolvedParams[2];
+            const aVar = block.resolvedParams[3];
+            const valueVar = block.resolvedParams[4];
+
+            const packed = valueVar.num() >>> 0;
+
+            rVar.setnum(((packed >>> 24) & 0xFF) / 255);
+            gVar.setnum(((packed >>> 16) & 0xFF) / 255);
+            bVar.setnum(((packed >>> 8) & 0xFF) / 255);
+            aVar.setnum((packed & 0xFF) / 255);
+        },
     }
 }
 

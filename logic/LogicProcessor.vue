@@ -107,10 +107,6 @@
           <div class="insert-line"></div>
           <button class="insert-btn">+</button>
         </div>
-        <div v-if="items.length > 0" class="insert-zone" @click.stop="openAddMenu(0)">
-          <div class="insert-line"></div>
-          <button class="insert-btn">+</button>
-        </div>
       </div>
 
       <draggable
@@ -146,20 +142,20 @@
             </div>
 
             <LogicElement
-                :type="element"
-                :index="displayIndices[index]"
-                :title="element.command"
-                :color="element.category?.color || '#888'"
-                @remove="removeItem(element.id)"
-                @copy="copyItem(index)"
-                @add="openAddMenu(index + 1)"
-                :class="{
-                  'is-active': hoveredIndex === index || connectedIndices.has(index) || element.id === arrowDrag.hoveredItemId,
-                  'is-drop-target': element.id === arrowDrag.hoveredItemId,
-                  'is-executing': activeExecutingIndex === index,
-                  'is-selected-block': selectedIds.has(element.id),
-                  'is-label': element.command === 'label'
-                }"
+              :type="element"
+              :index="displayIndices[index]"
+              :title="element.command"
+              :color="element.category?.color || '#888'"
+              @remove="removeItem(element.id)"
+              @copy="copyItem(index)"
+              @add="openAddMenu(index + 1)"
+              :class="{
+                'is-active': hoveredIndex === index || connectedIndices.has(index) || element.id === arrowDrag.hoveredItemId,
+                'is-drop-target': element.id === arrowDrag.hoveredItemId,
+                'is-executing': activeExecutingIndex === index,
+                'is-selected-block': selectedIds.has(element.id),
+                'is-label': element.command === 'label'
+              }"
             >
               <div class="params-row" @copy.stop>
                 <div v-if="element.command === 'jump'" class="param-box">
@@ -223,20 +219,6 @@
           </div>
         </template>
       </draggable>
-      <div class="element-wrapper">
-        <LogicElement
-            :index="''"
-            :title="'Add'"
-            :color="'#8c6bed'"
-            :control="false"
-        >
-
-          <div class="param-box" @click.stop="openAddMenu(items.length)">
-            <button class="btn-reset big-insert-btn" @click="openAddMenu(items.length)">+</button>
-          </div>
-
-        </LogicElement>
-      </div>
     </ClientOnly>
 
     <Teleport to="body">
@@ -453,6 +435,7 @@ const clearAll = () => {
     items.value =[];
     selectedIds.value.clear();
     nextTick(onListChange);
+
     updateLines();
   }
 };
@@ -554,6 +537,7 @@ const toggleAuto = () => {
     runAuto();
   } else {
     clearTimeout(autoTimer);
+    cancelAnimationFrame(rafId);
   }
 };
 
@@ -714,7 +698,7 @@ const onArrowDragEnd = () => {
 };
 
 const updateLines = () => {
-  if (items.value.length === 0) return;
+  // if (items.value.length === 0) return;
 
   const offsets = new Map();
   let maxBottom = 0;
