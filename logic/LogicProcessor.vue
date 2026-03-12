@@ -142,14 +142,14 @@
             </div>
 
             <LogicElement
-              :type="element"
-              :index="displayIndices[index]"
-              :title="element.command"
-              :color="element.category?.color || '#888'"
-              @remove="removeItem(element.id)"
-              @copy="copyItem(index)"
-              @add="openAddMenu(index + 1)"
-              :class="{
+                :type="element"
+                :index="displayIndices[index]"
+                :title="element.command"
+                :color="element.category?.color || '#888'"
+                @remove="removeItem(element.id)"
+                @copy="copyItem(index)"
+                @add="openAddMenu(index + 1)"
+                :class="{
                 'is-active': hoveredIndex === index || connectedIndices.has(index) || element.id === arrowDrag.hoveredItemId,
                 'is-drop-target': element.id === arrowDrag.hoveredItemId,
                 'is-executing': activeExecutingIndex === index,
@@ -158,58 +158,99 @@
               }"
             >
               <div class="params-row" @copy.stop>
-                <div v-if="element.command === 'jump'" class="param-box">
-                  <span class="param-label">dest:</span>
-                  <input
-                      type="text"
-                      v-model="element.jumpDest"
-                      class="param-input jump-dest-input"
-                      @input="onJumpDestChange(element)"
-                  />
-                </div>
 
-                <div v-for="(p, pIdx) in element.params" :key="pIdx" class="param-box">
-                  <span class="param-label">{{ p.label }}:</span>
-
-                  <div v-if="p.type === 'enum'" class="custom-select-wrapper">
-                    <div
-                        class="param-input select-trigger"
-                        :style="{ borderBottomColor: element.category?.color || '#888' }"
-                        @click.stop="togglePopup(`${element.id}-${p.label}`)"
-                    >
-                      {{ p.value }}
-                    </div>
-                    <div v-if="activePopup === `${element.id}-${p.label}`" class="enum-popup" @click.stop>
-                      <div
-                          v-for="opt in p.options"
-                          :key="opt"
-                          class="enum-option"
-                          :class="{ 'is-selected': p.value === opt }"
-                          @click="selectOption(element, p, opt)"
-                      >
-                        {{ opt }}
-                      </div>
-                    </div>
+                <template v-if="element.command === 'math'">
+                  <div class="param-box">
+                    <span class="param-label">set:</span>
+                    <input
+                        type="text"
+                        v-model="element.params[0].value"
+                        class="param-input"
+                        :style="{ width: '80px', borderBottomColor: element.category?.color || '#e66565' }"
+                        @input="updateLines"
+                    />
+                    <span class="param-label" style="margin-left: 10px; margin-right: 6px;">=</span>
+                    <input
+                        type="text"
+                        v-model="element.params[1].value"
+                        class="param-input"
+                        :style="{ minWidth: '250px', fontWeight: 'bold', color: '#f7ce74', borderBottomColor: element.category?.color || '#e66565' }"
+                        placeholder="(a ^ 2 * 2 - 10) * 100"
+                        @input="updateLines"
+                    />
                   </div>
 
-                  <input
-                      v-else-if="p.type === 'number'"
-                      type="text"
-                      step="any"
-                      v-model.number="p.value"
-                      class="param-input"
-                      :style="{ borderBottomColor: element.category?.color || '#888' }"
-                      @input="updateLines"
-                  />
-                  <input
-                      v-else
-                      type="text"
-                      v-model="p.value"
-                      class="param-input"
-                      :style="{ borderBottomColor: element.category?.color || '#888' }"
-                      @input="updateLines"
-                  />
-                </div>
+                  <div v-if="flatCodeInfo.generatedMap.get(element.id)?.length > 0" class="sub-blocks-container">
+                    <div
+                        v-for="(genBlock, gIdx) in flatCodeInfo.generatedMap.get(element.id)"
+                        :key="gIdx"
+                        class="sub-block"
+                        :class="{'is-sub-executing': activeExecutingIndex === index && activeSubIndex === gIdx}"
+                    >
+                      <span class="sub-cmd">{{ genBlock.command }}</span>
+                      <span v-for="(gp, pIdx) in genBlock.params" :key="pIdx" class="sub-param">
+                        {{ gp.value }}
+                      </span>
+                    </div>
+                  </div>
+                </template>
+
+                <template v-else>
+                  <div v-if="element.command === 'jump'" class="param-box">
+                    <span class="param-label">dest:</span>
+                    <input
+                        type="text"
+                        v-model="element.jumpDest"
+                        class="param-input jump-dest-input"
+                        @input="onJumpDestChange(element)"
+                    />
+                  </div>
+
+                  <div v-for="(p, pIdx) in element.params" :key="pIdx" class="param-box">
+                    <span class="param-label">{{ p.label }}:</span>
+
+                    <div v-if="p.type === 'enum'" class="custom-select-wrapper">
+                      <div
+                          class="param-input select-trigger"
+                          :style="{ borderBottomColor: element.category?.color || '#888' }"
+                          @click.stop="togglePopup(`${element.id}-${p.label}`)"
+                      >
+                        {{ p.value }}
+                      </div>
+                      <div v-if="activePopup === `${element.id}-${p.label}`" class="enum-popup" @click.stop>
+                        <div
+                            v-for="opt in p.options"
+                            :key="opt"
+                            class="enum-option"
+                            :class="{ 'is-selected': p.value === opt }"
+                            @click="selectOption(element, p, opt)"
+                        >
+                          {{ opt }}
+                        </div>
+                      </div>
+                    </div>
+
+                    <input
+                        v-else-if="p.type === 'number'"
+                        type="text"
+                        step="any"
+                        v-model.number="p.value"
+                        class="param-input"
+                        :style="{ borderBottomColor: element.category?.color || '#888' }"
+                        @input="updateLines"
+                    />
+
+                    <input
+                        v-else
+                        type="text"
+                        v-model="p.value"
+                        class="param-input"
+                        :style="{ borderBottomColor: element.category?.color || '#888' }"
+                        @input="updateLines"
+                    />
+                  </div>
+                </template>
+
               </div>
             </LogicElement>
             <div class="insert-zone" @click.stop="openAddMenu(index + 1)">
@@ -250,7 +291,7 @@ import LogicElement from './LogicElement.vue'
 import { Asm } from './asm.js';
 import Vars from './Vars.vue';
 import Add from './Add.vue';
-
+import { compileMath } from './compiler.js';
 import { Parser } from "./parser.js";
 import Mock from "./Mock.vue";
 
@@ -292,39 +333,104 @@ const settings = reactive({
   max_jumpes: 500
 });
 
+const flatCodeInfo = computed(() => {
+  const flat =[];
+  const itemToFlatMap = new Map();
+  const generatedMap = new Map();
+  let flatIndex = 0;
 
-const displayIndices = computed(() => {
-  let count = 0;
-  return items.value.map(item => {
-    if (item.command === 'label') return '';
-    return count++;
+  items.value.forEach((item) => {
+    if (item.command === 'math') {
+      const target = item.params[0].value || 'result';
+      const expr = item.params[1].value || '';
+      const generated = compileMath(target, expr);
+
+      generatedMap.set(item.id, generated);
+
+      const startIndex = flatIndex;
+      if (generated.length === 0) {
+        flat.push({
+          command: 'set',
+          params: [{ value: 'null' }, { value: 'null' }],
+          id: `${item.id}_sub_0`,
+          _parentId: item.id,
+          _isFirst: true,
+          _subIndex: 0
+        });
+        flatIndex++;
+      } else {
+        generated.forEach((genBlock, idx) => {
+          flat.push({
+            ...genBlock,
+            id: `${item.id}_sub_${idx}`,
+            _parentId: item.id,
+            _isFirst: idx === 0,
+            _subIndex: idx
+          });
+          flatIndex++;
+        });
+      }
+      itemToFlatMap.set(item.id, { start: startIndex, end: flatIndex - 1, count: generated.length || 1 });
+    } else {
+      flat.push({ ...item, _parentId: item.id, _isFirst: true, _subIndex: 0 });
+      itemToFlatMap.set(item.id, { start: flatIndex, end: flatIndex, count: 1 });
+      flatIndex++;
+    }
   });
+
+  return { flat, itemToFlatMap, generatedMap };
 });
 
+watch(() => flatCodeInfo.value.flat, (newFlatCode) => {
+  asm.value.compile(newFlatCode);
+  triggerRef(asm);
+}, { deep: true });
+
 const activeExecutingIndex = computed(() => {
-  if (!items.value || items.value.length === 0) return -1;
+  if (!flatCodeInfo.value.flat || flatCodeInfo.value.flat.length === 0) return -1;
 
-  const instance = asm.value;
-  let curr = instance.current;
+  let currFlatIndex = asm.value.current;
+  if (currFlatIndex === undefined || currFlatIndex === null || currFlatIndex < 0) currFlatIndex = 0;
 
-  if (curr === undefined || curr === null || curr < 0) curr = 0;
+  if (currFlatIndex >= flatCodeInfo.value.flat.length) currFlatIndex = 0;
 
-  const maxLoops = items.value.length;
-  let looped = 0;
-
-  while (looped < maxLoops) {
-    if (curr >= items.value.length) curr = 0;
-
-    const block = items.value[curr];
-    if (block && block.command !== 'label') {
-      return curr;
-    }
-
-    curr++;
-    looped++;
+  const flatBlock = flatCodeInfo.value.flat[currFlatIndex];
+  if (flatBlock && flatBlock._parentId) {
+    return items.value.findIndex(i => i.id === flatBlock._parentId);
   }
+  return -1;
+});
 
-  return instance.current;
+const displayIndices = computed(() => {
+  const indices =[];
+  const { itemToFlatMap } = flatCodeInfo.value;
+
+  items.value.forEach((item) => {
+    if (item.command === 'label') {
+      indices.push('');
+      return;
+    }
+    const mapping = itemToFlatMap.get(item.id);
+    if (mapping && mapping.count > 1) {
+      indices.push(`${mapping.start}-${mapping.end}`);
+    } else if (mapping) {
+      indices.push(mapping.start);
+    } else {
+      indices.push('?');
+    }
+  });
+  return indices;
+});
+
+const activeSubIndex = computed(() => {
+  if (!flatCodeInfo.value.flat || flatCodeInfo.value.flat.length === 0) return -1;
+  let curr = asm.value.current || 0;
+  if (curr >= flatCodeInfo.value.flat.length) curr = 0;
+
+  const flatBlock = flatCodeInfo.value.flat[curr];
+  if (!flatBlock || !flatBlock._parentId) return -1;
+
+  return flatBlock._subIndex !== undefined ? flatBlock._subIndex : -1;
 });
 
 const onParamInput = (element, param) => {
@@ -382,6 +488,15 @@ const copySelectedToClipboard = async () => {
   const textToCopy = itemsToCopy.map(b => {
     if (b.command === 'jump') return `jump ${b.jumpDest} ${b.params.map(p => p.value).join(' ')}`;
     if (b.command === 'label') return `${b.params[0].value}:`;
+
+    if (b.command === 'math') {
+      const generated = flatCodeInfo.value.generatedMap.get(b.id);
+      if (generated && generated.length > 0) {
+        return generated.map(gen => `${gen.command} ${gen.params.map(p => p.value).join(' ')}`).join('\n');
+      }
+      return 'set null null';
+    }
+
     return `${b.command} ${b.params.map(p => p.value).join(' ')}`;
   }).join('\n');
 
@@ -409,7 +524,6 @@ const pasteFromClipboard = async (targetIndex = -1) => {
     if (targetIndex !== -1) {
       insertPos = targetIndex;
     } else if (selectedIds.value.size > 0) {
-
       let maxIdx = -1;
       items.value.forEach((item, idx) => {
         if (selectedIds.value.has(item.id) && idx > maxIdx) maxIdx = idx;
@@ -550,6 +664,17 @@ watch(() => settings.ips, (newIps) => {
 });
 
 const createNewElement = (cmd = 'set', args =[]) => {
+  if (cmd === 'math') {
+    return {
+      id: Math.random().toString(36).substr(2, 9),
+      command: 'math',
+      category: { color: '#7859a8' },
+      params:[
+        { label: 'target', type: 'text', value: args[0] !== undefined ? args[0] : 'result' },
+        { label: 'expr', type: 'text', value: args[1] !== undefined ? args[1] : 'a + b * 10' }
+      ]
+    };
+  }
   const p = new Parser("");
   return p.createItemObject(cmd, args);
 };
@@ -581,11 +706,6 @@ const next = async (shouldScroll = false) => {
     window.scrollBy({ top: newVisualTop - oldVisualTop, behavior: 'auto' });
   }
 }
-
-watch(items, (newItems) => {
-  asm.value.compile(newItems);
-  triggerRef(asm);
-}, { deep: true });
 
 const arrowDrag = ref({
   isDragging: false,
@@ -698,8 +818,6 @@ const onArrowDragEnd = () => {
 };
 
 const updateLines = () => {
-  // if (items.value.length === 0) return;
-
   const offsets = new Map();
   let maxBottom = 0;
 
@@ -1007,16 +1125,11 @@ onMounted(async () => {
       parser.maxJumps = settings.max_jumpes;
 
       const newList = parser.parse();
-
       items.value = newList;
-      asm.value.compile(newList);
-
-      asm.value.code = newList;
 
       setTimeout(updateLines, 100);
     }
   }
-
 });
 
 onUnmounted(() => {
@@ -1240,7 +1353,6 @@ onUnmounted(() => {
   border: 2px solid #1a1a1a;
   border-radius: 50%;
   width: 24px;
-
   height: 24px;
   display: flex;
   align-items: center;
@@ -1316,5 +1428,42 @@ onUnmounted(() => {
 .big-insert-btn {
   width: 100%;
   height: 100%;
+}
+
+.sub-blocks-container {
+  width: 100%;
+  margin-top: 8px;
+  background: rgba(0, 0, 0, 0.2);
+  border-radius: 6px;
+  padding: 6px;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.sub-block {
+  display: flex;
+  gap: 8px;
+  font-family: monospace;
+  font-size: 14px;
+  color: #ccc;
+  padding: 4px 8px;
+  border-left: 2px solid transparent;
+  transition: all 0.2s;
+}
+
+.sub-cmd {
+  color: #8c6bed;
+  font-weight: bold;
+}
+
+.sub-param {
+  color: #fff;
+}
+
+.is-sub-executing {
+  border-left: 2px solid #b8d8be;
+  background: rgba(184, 216, 190, 0.15);
+  color: #fff;
 }
 </style>

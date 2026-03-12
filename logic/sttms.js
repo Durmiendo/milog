@@ -27,6 +27,10 @@ export const cats = {
         name: "Неизвестно",
         color: "#777777"
     },
+    template:{
+        name: "Шаблоны",
+        color: "#9cdabb"
+    }
 }
 
 export const all = {

@@ -8,7 +8,7 @@ const searchQuery = ref('');
 const searchInputRef = ref(null);
 
 const categoryOrder = [
-  'io', 'block', 'operation', 'control', 'unit', 'world', 'unknown'
+  'io', 'block', 'operation', 'control', 'unit', 'world', 'template', 'unknown'
 ];
 
 const groupedCommands = computed(() => {
@@ -23,6 +23,15 @@ const groupedCommands = computed(() => {
       params: [{ name: 'name', type: 'string', values: ['l1'] }]
     });
   }
+
+  if (!allObjs.find(o => o.name === 'math')) {
+    allObjs.push({
+      name: 'math',
+      category: 'template',
+      params: [{ name: 'name', type: 'string', values: ['l1'] }]
+    });
+  }
+
 
   allObjs.forEach(cmd => {
     if (cmd.name.toLowerCase().includes(query)) {
