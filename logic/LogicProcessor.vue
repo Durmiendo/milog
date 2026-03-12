@@ -158,7 +158,6 @@
               }"
             >
               <div class="params-row" @copy.stop>
-
                 <template v-if="element.command === 'math'">
                   <div class="param-box">
                     <span class="param-label">set:</span>
@@ -178,20 +177,6 @@
                         placeholder="(a ^ 2 * 2 - 10) * 100"
                         @input="updateLines"
                     />
-                  </div>
-
-                  <div v-if="flatCodeInfo.generatedMap.get(element.id)?.length > 0" class="sub-blocks-container">
-                    <div
-                        v-for="(genBlock, gIdx) in flatCodeInfo.generatedMap.get(element.id)"
-                        :key="gIdx"
-                        class="sub-block"
-                        :class="{'is-sub-executing': activeExecutingIndex === index && activeSubIndex === gIdx}"
-                    >
-                      <span class="sub-cmd">{{ genBlock.command }}</span>
-                      <span v-for="(gp, pIdx) in genBlock.params" :key="pIdx" class="sub-param">
-                        {{ gp.value }}
-                      </span>
-                    </div>
                   </div>
                 </template>
 
@@ -251,6 +236,40 @@
                   </div>
                 </template>
 
+                <template v-if="flatCodeInfo.generatedMap.get(element.id)?.length > 0">
+                  <div class="param-box" style="margin-left: auto;">
+                    <button class="toggle-btn" @click.stop="element._collapsed = !element._collapsed">
+                      {{ element._collapsed ? 'show operations' : 'hide operations' }}
+                    </button>
+                  </div>
+
+                  <div v-if="!element._collapsed" class="sub-blocks-container">
+                    <LogicElement
+                        v-for="(genBlock, gIdx) in flatCodeInfo.generatedMap.get(element.id)"
+                        :key="gIdx"
+                        :type="genBlock"
+                        :title="genBlock.command"
+                        :color="getCommandColor(genBlock.command)"
+                        :index="(flatCodeInfo.itemToFlatMap.get(element.id)?.start || 0) + gIdx"
+                        :control="true"
+                        class="mini-logic-element"
+                        :class="{'is-mini-executing': activeExecutingIndex === index && activeSubIndex === gIdx}"
+                    >
+                      <div class="params-row mini-params-row">
+                        <div v-for="(gp, pIdx) in genBlock.params" :key="pIdx" class="param-box">
+                          <span v-if="gp.label" class="param-label">{{ gp.label }}:</span>
+                          <div
+                              class="param-input disabled-input"
+                              :style="{ borderBottomColor: getCommandColor(genBlock.command) }"
+                          >
+                            {{ gp.value }}
+                          </div>
+                        </div>
+                      </div>
+                    </LogicElement>
+                  </div>
+                </template>
+
               </div>
             </LogicElement>
             <div class="insert-zone" @click.stop="openAddMenu(index + 1)">
@@ -294,6 +313,7 @@ import Add from './Add.vue';
 import { compileMath } from './compiler.js';
 import { Parser } from "./parser.js";
 import Mock from "./Mock.vue";
+import {cats} from "./sttms";
 
 const showAddMenu = ref(false);
 const showMocks = ref(false);
@@ -333,6 +353,21 @@ const settings = reactive({
   max_jumpes: 500
 });
 
+const getCommandColor = (cmd) => {
+  const operations =['set', 'op', 'lookup', 'packcolor'];
+  const control = ['jump', 'end', 'wait', 'stop', 'label'];
+  const io =['read', 'write', 'print', 'printflush', 'getlink', 'control', 'radar', 'sensor'];
+  const unit =['ubind', 'ucontrol', 'uradar', 'ulocate'];
+  const world =['getblock', 'setblock', 'spawn', 'status', 'spawnwave', 'setrule', 'message', 'cutscene', 'effect', 'explosion', 'setrate', 'fetch', 'sync', 'getflag', 'setflag', 'makemarker'];
+
+  if (operations.includes(cmd)) return '#877bad';
+  if (control.includes(cmd)) return '#6bb2b2';
+  if (io.includes(cmd)) return '#a08a8a';
+  if (unit.includes(cmd)) return '#c7b59d';
+  if (world.includes(cmd)) return '#6b84d4';
+  return '#777777';
+};
+
 const flatCodeInfo = computed(() => {
   const flat =[];
   const itemToFlatMap = new Map();
@@ -351,7 +386,7 @@ const flatCodeInfo = computed(() => {
       if (generated.length === 0) {
         flat.push({
           command: 'set',
-          params: [{ value: 'null' }, { value: 'null' }],
+          params:[{ value: 'null' }, { value: 'null' }],
           id: `${item.id}_sub_0`,
           _parentId: item.id,
           _isFirst: true,
@@ -531,6 +566,7 @@ const pasteFromClipboard = async (targetIndex = -1) => {
       insertPos = maxIdx + 1;
     }
 
+    newItems.forEach(i => i._collapsed = false);
     items.value.splice(insertPos, 0, ...newItems);
 
     selectedIds.value.clear();
@@ -668,7 +704,8 @@ const createNewElement = (cmd = 'set', args =[]) => {
     return {
       id: Math.random().toString(36).substr(2, 9),
       command: 'math',
-      category: { color: '#7859a8' },
+      category: cats['template'],
+      _collapsed: false,
       params:[
         { label: 'target', type: 'text', value: args[0] !== undefined ? args[0] : 'result' },
         { label: 'expr', type: 'text', value: args[1] !== undefined ? args[1] : 'a + b * 10' }
@@ -676,7 +713,9 @@ const createNewElement = (cmd = 'set', args =[]) => {
     };
   }
   const p = new Parser("");
-  return p.createItemObject(cmd, args);
+  const item = p.createItemObject(cmd, args);
+  item._collapsed = false;
+  return item;
 };
 
 const resetSettings = () => {
@@ -1125,6 +1164,7 @@ onMounted(async () => {
       parser.maxJumps = settings.max_jumpes;
 
       const newList = parser.parse();
+      newList.forEach(i => i._collapsed = false);
       items.value = newList;
 
       setTimeout(updateLines, 100);
@@ -1144,326 +1184,50 @@ onUnmounted(() => {
 
 <style scoped>
 .logic-canvas { min-height: 100vh; }
-.connections-layer {
-  position: absolute; top: 0; left: 0; width: 100%;
-  pointer-events: none; z-index: 2; overflow: visible;
-}
+.connections-layer { position: absolute; top: 0; left: 0; width: 100%; pointer-events: none; z-index: 2; overflow: visible; }
 .jump-line { transition: stroke 0.2s; }
 .element-wrapper { margin-bottom: 8px; position: relative; transition: opacity 0.2s; }
-
-.ghost-item {
-  opacity: 0.6 !important;
-  filter: drop-shadow(0 0 5px rgba(140, 107, 237, 0.4));
-  outline: 2px dashed #8c6bed !important;
-  outline-offset: -2px;
-}
-
-.element-toolbar {
-  position: absolute;
-  top: 0px;
-  left: -50px;
-  z-index: 40;
-  display: flex;
-  justify-content: center;
-  align-items: center;
-  flex-direction: column;
-  gap: 2px;
-  background: rgba(0, 0, 0, 0.5);
-  border-radius: 10px;
-  padding: 4px 6px;
-}
-.element-toolbar button {
-  background: transparent;
-  border: 0;
-  color: white;
-  cursor: pointer;
-  font-size: 14px;
-  padding: 2px 3px;
-  border-radius: 9px;
-  transition: all 0.2s;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-}
-.element-toolbar button:hover {
-  box-shadow: inset 0 0 5px #a3d2ff;
-  transform: translateY(-1px);
-}
-
-.is-arrow-dragging {
-  cursor: grabbing !important;
-}
-.is-arrow-dragging * {
-  cursor: grabbing !important;
-}
-
-:deep(.is-drop-target) {
-  outline: 2px #f7ce74 !important;
-  outline-offset: 3px;
-  box-shadow: 0 0 10px rgba(247, 206, 116, 0.5);
-  transition: outline 0.1s, box-shadow 0.1s;
-}
-
-:deep(.is-executing) {
-  outline: 2px solid #b8d8be !important;
-  outline-offset: 2px;
-  z-index: 10;
-  transform-origin: left center;
-  transition: transform 0.2s ease-out, outline 0.2s, box-shadow 0.2s;
-}
-
-:deep(.is-selected-block) {
-  outline: 2px solid #8c6bed !important;
-  outline-offset: 2px;
-  background-color: rgba(140, 107, 237, 0.15) !important;
-  border-radius: 6px;
-}
-
-:deep(.is-label) {
-  filter: saturate(0.5);
-}
-
+.ghost-item { opacity: 0.6 !important; filter: drop-shadow(0 0 5px rgba(140, 107, 237, 0.4)); outline: 2px dashed #8c6bed !important; outline-offset: -2px; }
+.element-toolbar { position: absolute; top: 0; left: -50px; z-index: 40; display: flex; justify-content: center; align-items: center; flex-direction: column; gap: 2px; background: rgba(0, 0, 0, 0.5); border-radius: 10px; padding: 4px 6px; }
+.element-toolbar button { background: transparent; border: 0; color: white; cursor: pointer; font-size: 14px; padding: 2px 3px; border-radius: 9px; transition: all 0.2s; display: flex; align-items: center; justify-content: center; }
+.element-toolbar button:hover { box-shadow: inset 0 0 5px #a3d2ff; transform: translateY(-1px); }
+.is-arrow-dragging, .is-arrow-dragging * { cursor: grabbing !important; }
+:deep(.is-drop-target) { outline: 2px #f7ce74 !important; outline-offset: 3px; box-shadow: 0 0 10px rgba(247, 206, 116, 0.5); transition: outline 0.1s, box-shadow 0.1s; }
+:deep(.is-executing) { outline: 2px solid #b8d8be !important; outline-offset: 2px; z-index: 10; transform-origin: left center; transition: transform 0.2s ease-out, outline 0.2s, box-shadow 0.2s; }
+:deep(.is-selected-block) { outline: 2px solid #8c6bed !important; outline-offset: 2px; background-color: rgba(140, 107, 237, 0.15) !important; border-radius: 6px; }
+:deep(.is-label) { filter: saturate(0.5); }
 .params-row { display: flex; gap: 12px; flex-wrap: wrap; padding: 4px; }
 .param-box { display: flex; align-items: center; }
 .param-label { font-size: 18px; }
-
-.param-input {
-  background: transparent; border: none; border-bottom: 4px solid;
-  color: white; padding: 2px; font-size: 18px; font-family: inherit;
-  margin-left: 6px; outline: none; min-width: 40px; max-width: 140px;
-  opacity: 0.8;
-}
-
-.jump-dest-input {
-  border-bottom-color: #f7ce74 !important;
-  width: 50px;
-  color: #f7ce74;
-  font-weight: bold;
-}
-
+.param-input { background: transparent; border: none; border-bottom: 4px solid; color: white; padding: 2px; font-size: 18px; font-family: inherit; margin-left: 6px; outline: none; min-width: 40px; max-width: 140px; opacity: 0.8; }
+.jump-dest-input { border-bottom-color: #f7ce74 !important; width: 50px; color: #f7ce74; font-weight: bold; }
 .custom-select-wrapper { position: relative; }
-.enum-popup {
-  position: absolute; top: 100%; left: 0; margin-top: 4px;
-  background: #000; border: 4px solid #4a4a4a;
-  display: grid; grid-template-columns: 1fr 1fr;
-  z-index: 100; min-width: 180px;
-}
-.enum-option {
-  color: #fff; padding: 8px; cursor: pointer; text-align: center;
-  text-shadow:
-      1px   1px 1px black,
-      -1px  1px 1px black,
-      -1px -1px 1px black,
-      1px  -1px 1px black;
-}
+.enum-popup { position: absolute; top: 100%; left: 0; margin-top: 4px; background: #000; border: 4px solid #4a4a4a; display: grid; grid-template-columns: 1fr 1fr; z-index: 100; min-width: 180px; }
+.enum-option { color: #fff; padding: 8px; cursor: pointer; text-align: center; text-shadow: 1px 1px 1px black, -1px 1px 1px black, -1px -1px 1px black, 1px -1px 1px black; }
 .enum-option:hover { background: rgba(255,255,255,0.1); }
 .enum-option.is-selected { background: #f7ce74; }
-
-.btn-reset {
-  background-color: transparent;
-  color: #8c6bed;
-  border: 4px solid #8c6bed;
-  padding: 4px 12px;
-  font-size: 16px;
-  font-family: inherit;
-  font-weight: bold;
-  cursor: pointer;
-  transition: all 0.2s;
-}
-
-.btn-reset:hover {
-  background-color: #8c6bed;
-  border-color: #343333;
-  color: #fff;
-  box-shadow: 0 0 8px rgba(140, 107, 237, 0.6);
-}
-
-.btn-reset:active {
-  transform: translateY(2px);
-}
-
-.vars-fullscreen-overlay {
-  position: fixed;
-  top: 0;
-  left: 0;
-  width: 100vw;
-  height: 100vh;
-  background-color: rgba(15, 15, 15, 0.95);
-  z-index: 9999;
-  display: flex;
-  flex-direction: column;
-  backdrop-filter: blur(5px);
-}
-
-.btn-auto-active {
-  background-color: rgba(99, 53, 248, 0.4) !important;
-  color: #fff !important;
-  box-shadow: inset 0 0 5px #8c6bed !important;
-  border: 1px solid #8c6bed !important;
-}
-
-.insert-zone, .insert-zone-static {
-  position: absolute;
-  left: 0;
-  width: 100%;
-  height: 20px;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  opacity: 0;
-  z-index: 45;
-  cursor: pointer;
-  transition: opacity 0.2s;
-}
-
-.insert-zone {
-  bottom: -14px;
-}
-
-.insert-zone-static {
-  position: relative;
-  margin-top: 10px;
-  margin-bottom: -4px;
-}
-
-.is-dragging .insert-zone,
-.is-arrow-dragging .insert-zone,
-.is-dragging .insert-zone-static,
-.is-arrow-dragging .insert-zone-static {
-  display: none;
-}
-
-.insert-zone:hover, .insert-zone-static:hover {
-  opacity: 1;
-}
-
-.insert-line {
-  position: absolute;
-  width: 100%;
-  height: 2px;
-  background-color: #8c6bed;
-  z-index: 1;
-}
-
-.insert-btn {
-  position: relative;
-  z-index: 2;
-  background: #8c6bed;
-  color: white;
-  border: 2px solid #1a1a1a;
-  border-radius: 50%;
-  width: 24px;
-  height: 24px;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  font-weight: bold;
-  font-size: 16px;
-  cursor: pointer;
-  transition: transform 0.2s;
-  box-shadow: 0 0 8px rgba(140, 107, 237, 0.4);
-}
-
-.insert-btn:hover {
-  transform: scale(1.2);
-  background-color: #a38bf5;
-}
-
-.multi-drag-image-container {
-  position: absolute;
-  top: -9999px;
-  left: -9999px;
-  z-index: -9999;
-  opacity: 1;
-  pointer-events: none;
-}
-
-:deep(.multi-drag-badge) {
-  position: absolute;
-  bottom: -15px;
-  right: -15px;
-  background-color: #f7ce74;
-  color: #1a1a1a;
-  font-weight: bold;
-  font-size: 16px;
-  padding: 4px 10px;
-  border-radius: 20px;
-  border: 3px solid #1a1a1a;
-  z-index: 20;
-  box-shadow: 0 4px 8px rgba(0,0,0,0.5);
-}
-
-.insert-zone {
-  position: absolute;
-  left: 0;
-  width: 100%;
-  height: 20px;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  opacity: 0;
-  z-index: 45;
-  cursor: pointer;
-  transition: opacity 0.2s;
-  bottom: -14px;
-}
-
-.is-dragging .insert-zone,
-.is-arrow-dragging .insert-zone {
-  display: none;
-}
-
-.insert-zone:hover {
-  opacity: 1;
-}
-
-.insert-line {
-  position: absolute;
-  width: 100%;
-  height: 2px;
-  background-color: #8c6bed;
-  z-index: 1;
-}
-
-.big-insert-btn {
-  width: 100%;
-  height: 100%;
-}
-
-.sub-blocks-container {
-  width: 100%;
-  margin-top: 8px;
-  background: rgba(0, 0, 0, 0.2);
-  border-radius: 6px;
-  padding: 6px;
-  display: flex;
-  flex-direction: column;
-  gap: 4px;
-}
-
-.sub-block {
-  display: flex;
-  gap: 8px;
-  font-family: monospace;
-  font-size: 14px;
-  color: #ccc;
-  padding: 4px 8px;
-  border-left: 2px solid transparent;
-  transition: all 0.2s;
-}
-
-.sub-cmd {
-  color: #8c6bed;
-  font-weight: bold;
-}
-
-.sub-param {
-  color: #fff;
-}
-
-.is-sub-executing {
-  border-left: 2px solid #b8d8be;
-  background: rgba(184, 216, 190, 0.15);
-  color: #fff;
-}
+.btn-reset { background-color: transparent; color: #8c6bed; border: 4px solid #8c6bed; padding: 4px 12px; font-size: 16px; font-family: inherit; font-weight: bold; cursor: pointer; transition: all 0.2s; }
+.btn-reset:hover { background-color: #8c6bed; border-color: #343333; color: #fff; box-shadow: 0 0 8px rgba(140, 107, 237, 0.6); }
+.btn-reset:active { transform: translateY(2px); }
+.vars-fullscreen-overlay { position: fixed; top: 0; left: 0; width: 100vw; height: 100vh; background-color: rgba(15, 15, 15, 0.95); z-index: 9999; display: flex; flex-direction: column; backdrop-filter: blur(5px); }
+.btn-auto-active { background-color: rgba(99, 53, 248, 0.4) !important; color: #fff !important; box-shadow: inset 0 0 5px #8c6bed !important; border: 1px solid #8c6bed !important; }
+.insert-zone { position: absolute; left: 0; width: 100%; height: 20px; display: flex; align-items: center; justify-content: center; opacity: 0; z-index: 45; cursor: pointer; transition: opacity 0.2s; bottom: -14px; }
+.is-dragging .insert-zone, .is-arrow-dragging .insert-zone { display: none; }
+.insert-zone:hover { opacity: 1; }
+.insert-line { position: absolute; width: 100%; height: 2px; background-color: #8c6bed; z-index: 1; }
+.insert-btn { position: relative; z-index: 2; background: #8c6bed; color: white; border: 2px solid #1a1a1a; border-radius: 50%; width: 24px; height: 24px; display: flex; align-items: center; justify-content: center; font-weight: bold; font-size: 16px; cursor: pointer; transition: transform 0.2s; box-shadow: 0 0 8px rgba(140, 107, 237, 0.4); }
+.insert-btn:hover { transform: scale(1.2); background-color: #a38bf5; }
+.multi-drag-image-container { position: absolute; top: -9999px; left: -9999px; z-index: -9999; opacity: 1; pointer-events: none; }
+:deep(.multi-drag-badge) { position: absolute; bottom: -15px; right: -15px; background-color: #f7ce74; color: #1a1a1a; font-weight: bold; font-size: 16px; padding: 4px 10px; border-radius: 20px; border: 3px solid #1a1a1a; z-index: 20; box-shadow: 0 4px 8px rgba(0,0,0,0.5); }
+.sub-blocks-container { width: 100%; margin-top: 6px; display: flex; flex-direction: column; }
+.mini-logic-element { margin: 2px 0 !important; padding: 4px 6px !important; font-size: 14px !important; opacity: 0.9; transition: all 0.2s ease-out; }
+.mini-logic-element :deep(.code) { padding: 4px !important; }
+.mini-logic-element :deep(.addimg), .mini-logic-element :deep(.copyimg), .mini-logic-element :deep(.exitimg) { display: none !important; }
+.mini-params-row { gap: 8px !important; padding: 0 !important; }
+.mini-params-row .param-label { font-size: 14px; }
+.mini-params-row .disabled-input { font-size: 14px !important; padding: 0 4px; min-width: auto; pointer-events: none; }
+.is-mini-executing { opacity: 1; transform: translateX(8px); outline: 2px solid #b8d8be !important; outline-offset: 1px; box-shadow: 0 4px 10px rgba(184, 216, 190, 0.2); z-index: 5; }
+.is-mini-executing .disabled-input { color: #f7ce74; }
+.toggle-btn { background-color: transparent; color: #f7ce74; border: 2px solid #f7ce74; padding: 2px 8px; border-radius: 6px; cursor: pointer; font-size: 14px; font-family: inherit; font-weight: bold; transition: all 0.2s; }
+.toggle-btn:hover { background-color: #f7ce74; color: #1a1a1a; }
 </style>

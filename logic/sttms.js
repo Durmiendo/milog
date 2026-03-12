@@ -29,7 +29,7 @@ export const cats = {
     },
     template:{
         name: "Шаблоны",
-        color: "#9cdabb"
+        color: "#618673"
     }
 }
 
