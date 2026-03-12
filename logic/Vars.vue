@@ -42,7 +42,7 @@
 </template>
 
 <script setup>
-import { computed, onMounted, onUnmounted } from 'vue';
+import { computed, onMounted, onUnmounted, ref } from 'vue';
 
 const props = defineProps({
   asm: {
@@ -53,16 +53,20 @@ const props = defineProps({
 
 const emit = defineEmits(['close']);
 
+const tick = ref(0);
+let updateTimer = null;
+
 const handleKeydown = (e) => {
   if (e.key === 'Escape') emit('close');
 };
 
 const displayVars = computed(() => {
-  if (!props.asm || !props.asm.vars) return [];
+  tick.value;
+
+  if (!props.asm || !props.asm.vars) return[];
 
   const allVars = Object.values(props.asm.vars);
 
-  // const regularVars = allVars.filter(v => !v.constant);
   const regularVars = allVars.filter(v => true);
 
   const allowedSysNames = ['true', 'false', 'null'];
@@ -73,7 +77,6 @@ const displayVars = computed(() => {
 
   return [...regularVars, ...systemConsts];
 });
-
 
 const getVarType = (v) => {
   if (!v) return 'Unknown';
@@ -107,8 +110,20 @@ const getVarValue = (v) => {
   return parseFloat(v.numval.toFixed(6));
 };
 
-onMounted(() => window.addEventListener('keydown', handleKeydown));
-onUnmounted(() => window.removeEventListener('keydown', handleKeydown));
+onMounted(() => {
+  window.addEventListener('keydown', handleKeydown);
+  updateTimer = setInterval(() => {
+    tick.value++;
+  }, 50);
+});
+
+onUnmounted(() => {
+  window.removeEventListener('keydown', handleKeydown);
+
+  if (updateTimer) {
+    clearInterval(updateTimer);
+  }
+});
 </script>
 
 <style scoped>
