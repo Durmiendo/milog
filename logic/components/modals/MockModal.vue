@@ -41,7 +41,7 @@
 
           <LogicElement
               :index="`#${block.id}`"
-              :title="block.name"
+              :title="block.link || block.name"
               :color="getBlockColor(type)"
               :type="{ command: block.name }"
               :control="true"
@@ -143,7 +143,7 @@
 
 <script setup>
 import { reactive, ref, computed, watchEffect, onMounted, onUnmounted } from 'vue';
-import LogicElement from './LogicElement.vue';
+import LogicElement from "../blocks/LogicElement.vue";
 
 const props = defineProps({
   world: { type: Object, default: null }

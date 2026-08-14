@@ -1,4 +1,4 @@
-import {World} from "./mock";
+import {World} from "./mock.js";
 
 export class Asm {
     world = undefined; // mock
@@ -356,7 +356,8 @@ export class Asm {
                 destIndex = parseInt(block.jumpDest, 10);
             }
 
-            if (destIndex < 0 || destIndex >= vm.code.length) return;
+            if (destIndex < 0) return;
+            if (destIndex >= vm.code.length) destIndex = 0;
 
             const opRaw = block.params[0];
             const op = (typeof opRaw === 'object' && opRaw !== null) ? opRaw.value : opRaw;

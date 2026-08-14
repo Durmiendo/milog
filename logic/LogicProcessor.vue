@@ -1,1233 +1,948 @@
 <template>
   <div
       ref="containerRef"
+      tabindex="-1"
       class="logic-canvas"
-      :class="{ 'is-dragging': isDragging, 'is-arrow-dragging': arrowDrag.isDragging }"
-      style="position: relative; width: 100%; padding-right: 250px;"
+      :class="{ 'is-dragging': canvas.isDragging.value, 'is-arrow-dragging': canvas.arrowDrag.value.isDragging }"
+      style="position: relative; width: 100%; outline: none;"
+      @keydown="handleKeydown"
+      @click="handleGlobalClick"
   >
-    <div ref="contentSource" v-if="!items.length" style="display: none;"><slot /></div>
+    <div ref="contentSource" v-if="!core.items.value.length" style="display: none;">
+      <slot/>
+    </div>
 
-    <svg v-if="connectionPaths.length > 0" class="connections-layer" :style="{ height: containerHeight + 'px' }">
-      <path
-          v-for="(path, i) in connectionPaths"
-          :key="'path-' + i"
-          :d="path.d"
-          fill="none"
-          :stroke="activePathIds.has(i) || path.isDragging ? '#6335f8' : 'rgba(255,255,255,0.4)'"
-          :stroke-width="activePathIds.has(i) || path.isDragging ? 6 : 4"
-          stroke-linejoin="round"
-          class="jump-line"
-      />
-      <g v-for="(path, i) in connectionPaths" :key="'handle-' + i">
-        <circle
-            :cx="path.endX"
-            :cy="path.endY"
-            r="16"
-            fill="transparent"
-            style="pointer-events: auto; cursor: grab;"
-            @pointerdown.stop.prevent="startArrowDrag($event, path)"
-        />
-        <polygon
-            :points="`${path.endX-8},${path.endY} ${path.endX+18},${path.endY-12} ${path.endX+18},${path.endY+12}`"
-            :fill="activePathIds.has(i) || path.isDragging ? '#6335f8' : 'rgba(255,255,255,0.8)'"
-            style="pointer-events: none;"
-        />
-      </g>
-    </svg>
+    <CanvasLines
+        :connectionPaths="canvas.connectionPaths.value"
+        :activePathIds="canvas.activePathIds.value"
+        :containerHeight="canvas.containerHeight.value"
+        @startArrowDrag="canvas.startArrowDrag"
+    />
 
     <ClientOnly>
-      <div class="element-wrapper">
-        <LogicElement
-            :index="''"
-            :title="'Settings'"
-            :color="'#8c6bed'"
-            :control="false"
-        >
-          <div class="params-row" @copy.stop>
-            <div class="param-box">
-              <span class="param-label">ips:</span>
-              <input type="number" v-model.number="settings.ips" class="param-input" style="border-bottom-color: #8c6bed" />
-            </div>
-            <div class="param-box">
-              <span class="param-label">max_lines:</span>
-              <input type="number" v-model.number="settings.max_lines" class="param-input" style="border-bottom-color: #8c6bed" />
-            </div>
-            <div class="param-box">
-              <span class="param-label">max_jumpes:</span>
-              <input type="number" v-model.number="settings.max_jumpes" class="param-input" style="border-bottom-color: #8c6bed" />
-            </div>
-            <div class="param-box">
-              <button class="btn-reset" @click="resetSettings">reset</button>
-            </div>
-            <div class="param-box">
-              <button class="btn-reset" @click="copySelectedToClipboard">to buffer</button>
-            </div>
-            <div class="param-box">
-              <button class="btn-reset" @click="pasteFromClipboard()">from buffer</button>
-            </div>
-            <div class="param-box">
-              <button class="btn-reset" @click="clearAll">clear</button>
-            </div>
-            <div class="param-box">
-              <button class="btn-reset" @click="showMocks = true">add block</button>
-            </div>
-          </div>
-        </LogicElement>
-      </div>
+      <Toolbars
+          :settings="core.settings"
+          :isAutoRunning="core.isAutoRunning.value"
+          :isCodeLocked="core.isCodeLocked.value"
+          :allowCustomBlocks="core.allowCustomBlocks.value && !core.isCodeLocked.value"
+          @reset="resetSettings"
+          @resetRun="core.resetTests()"
+          @copy="core.copySelected"
+          @paste="core.pasteClipboard"
+          @clear="core.clearAll"
+          @addBlock="openAddMenu(core.items.value.length)"
+          @run="core.next(false, canvas.itemRefs)"
+          @toggleAuto="core.toggleAuto"
+          @showVars="core.showVars.value = true"
+          @showMocks="core.showMocks.value = true"
+          @goTo="goToCurrent"
+      />
 
-      <div class="element-wrapper">
-        <LogicElement
-            :index="''"
-            :title="'Control'"
-            :color="'#8c6bed'"
-            :control="false"
-        >
-          <div class="params-row" @copy.stop>
-            <div class="param-box">
-              <button class="btn-reset" @click="next(false)">run</button>
-            </div>
-            <div class="param-box">
-              <button class="btn-reset" :class="{ 'btn-auto-active': isAutoRunning }" @click="toggleAuto">
-                {{ isAutoRunning ? 'stop' : 'auto' }}
-              </button>
-            </div>
-            <div class="param-box">
-              <button class="btn-reset" @click="showVars = true">vars</button>
-            </div>
-            <div class="param-box">
-              <button class="btn-reset" @click="showMocks = true">mocks</button>
-            </div>
-            <div class="param-box">
-              <button class="btn-reset" @click="goToCurrent">go to</button>
-            </div>
-          </div>
-        </LogicElement>
-
-        <div v-if="items.length > 0" class="insert-zone" @click.stop="openAddMenu(0)">
-          <div class="insert-line"></div>
-          <button class="insert-btn">+</button>
-        </div>
+      <div v-if="!core.isCodeLocked.value && core.items.value.length > 0 && !isNextConnectLocked(-1)" class="top-insert">
+        <InsertZone @add="openAddMenu(0)"/>
       </div>
 
       <draggable
-          v-model="items"
+          v-model="core.items.value"
           handle=".header"
           item-key="id"
-          :ghost-class="'ghost-item'"
+          ghost-class="ghost-item"
+          filter=".is-drag-locked"
+          :move="onMove"
           :animation="0"
-          :setData="onSetData"
-          @start="onDragStart"
-          @end="onDragEnd"
-          @change="onListChange"
+          :disabled="core.isCodeLocked.value"
+          :setData="canvas.onSetData"
+          @start="canvas.onDragStart"
+          @end="canvas.onDragEnd"
+          @change="canvas.onListChange"
       >
         <template #item="{ element, index }">
           <div
-              :ref="el => setItemRef(el, element.id)"
+              :ref="el => canvas.setItemRef(el, element.id)"
               :data-item-id="element.id"
               class="element-wrapper"
-              @mouseenter="hoveredIndex = index"
-              @mouseleave="hoveredIndex = null"
+              @mouseenter="canvas.hoveredIndex.value = index"
+              @mouseleave="canvas.hoveredIndex.value = null"
               @click="toggleSelection($event, element)"
-              :style="{ zIndex: activePopup?.startsWith(element.id) ? 50 : (activeExecutingIndex === index ? 40 : (hoveredIndex === index ? 30 : 2)) }"
+              :class="{
+                'is-drag-locked': element.lockMove,
+                'is-locked-block': element.lockEdit || element.lockMove || element.lockConnect,
+                'is-locked-connected-next': isNextConnectLocked(index),
+                'is-locked-connected-prev': isPrevConnectLocked(index)
+              }"
+              :style="{ zIndex: core.activePopup.value?.startsWith(element.id) ? 50 : (core.activeExecutingIndex.value === index ? 40 : (canvas.hoveredIndex.value === index ? 30 : 2)) }"
           >
-            <div class="element-toolbar" v-if="activeExecutingIndex === index">
-              <button class="btn-next" @click.stop="next(true)">run</button>
-              <button
-                  @click.stop="toggleAuto"
-                  :class="{ 'btn-auto-active': isAutoRunning }"
-              >
-                {{ isAutoRunning ? 'stop' : 'auto' }}
-              </button>
-              <button @click.stop="showVars = true">vars</button>
-            </div>
-
             <LogicElement
+                class="processor-block"
+                :style="{ '--progress': getTemplateProgress(element, index) + '%' }"
                 :type="element"
-                :index="displayIndices[index]"
+                :index="core.displayIndices.value[index]"
                 :title="element.command"
-                :color="element.category?.color || '#888'"
+                :color="core.getCommandColor(element.command)"
+                :control="!element.lockEdit && !core.isCodeLocked.value"
+                :locked="element.lockEdit || element.lockMove || element.lockConnect"
                 @remove="removeItem(element.id)"
                 @copy="copyItem(index)"
                 @add="openAddMenu(index + 1)"
                 :class="{
-                'is-active': hoveredIndex === index || connectedIndices.has(index) || element.id === arrowDrag.hoveredItemId,
-                'is-drop-target': element.id === arrowDrag.hoveredItemId,
-                'is-executing': activeExecutingIndex === index,
-                'is-selected-block': selectedIds.has(element.id),
+                'is-active': canvas.hoveredIndex.value === index || isConnected(index) || element.id === canvas.arrowDrag.value.hoveredItemId,
+                'is-drop-target': element.id === canvas.arrowDrag.value.hoveredItemId,
+                'is-executing': core.activeExecutingIndex.value === index,
+                'is-template-executing': core.activeExecutingIndex.value === index && templateRegistry[element.command],
+                'is-selected-block': core.selectedIds.value.has(element.id),
                 'is-label': element.command === 'label'
               }"
             >
               <div class="params-row" @copy.stop>
-                <template v-if="element.command === 'math'">
-                  <div class="param-box">
-                    <span class="param-label">set:</span>
-                    <input
-                        type="text"
-                        v-model="element.params[0].value"
-                        class="param-input"
-                        :style="{ width: '80px', borderBottomColor: element.category?.color || '#e66565' }"
-                        @input="updateLines"
-                    />
-                    <span class="param-label" style="margin-left: 10px; margin-right: 6px;">=</span>
-                    <input
-                        type="text"
-                        v-model="element.params[1].value"
-                        class="param-input"
-                        :style="{ minWidth: '250px', fontWeight: 'bold', color: '#f7ce74', borderBottomColor: element.category?.color || '#e66565' }"
-                        placeholder="(a ^ 2 * 2 - 10) * 100"
-                        @input="updateLines"
-                    />
-                  </div>
+
+                <template v-if="templateRegistry[element.command]">
+                  <component
+                      :is="dynamicTemplates[templateRegistry[element.command].componentName]"
+                      :element="element"
+                      :disabled="element.lockEdit || core.isCodeLocked.value"
+                      @update="canvas.updateLines"
+                  />
                 </template>
 
                 <template v-else>
                   <div v-if="element.command === 'jump'" class="param-box">
                     <span class="param-label">dest:</span>
-                    <input
-                        type="text"
-                        v-model="element.jumpDest"
-                        class="param-input jump-dest-input"
-                        @input="onJumpDestChange(element)"
-                    />
+                    <input type="text" v-model="element.jumpDest" class="param-input jump-dest-input"
+                           :disabled="element.lockEdit || core.isCodeLocked.value"
+                           @input="onJumpDestChange(element)"/>
                   </div>
 
                   <div v-for="(p, pIdx) in element.params" :key="pIdx" class="param-box">
                     <span class="param-label">{{ p.label }}:</span>
-
                     <div v-if="p.type === 'enum'" class="custom-select-wrapper">
-                      <div
-                          class="param-input select-trigger"
-                          :style="{ borderBottomColor: element.category?.color || '#888' }"
-                          @click.stop="togglePopup(`${element.id}-${p.label}`)"
-                      >
+                      <!-- Блокируем выбор только если это стандартный параметр И блок залочен (аргументы выбора [choice: ...] остаются разлоченными) -->
+                      <div class="param-input select-trigger"
+                           :class="{ 'disabled-trigger': !p.isChoice && (element.lockEdit || core.isCodeLocked.value) }"
+                           @click.stop="(!p.isChoice && (element.lockEdit || core.isCodeLocked.value)) ? null : togglePopup(`${element.id}-${p.label}`)">
                         {{ p.value }}
                       </div>
-                      <div v-if="activePopup === `${element.id}-${p.label}`" class="enum-popup" @click.stop>
-                        <div
-                            v-for="opt in p.options"
-                            :key="opt"
-                            class="enum-option"
-                            :class="{ 'is-selected': p.value === opt }"
-                            @click="selectOption(element, p, opt)"
-                        >
-                          {{ opt }}
+                      <div v-if="core.activePopup.value === `${element.id}-${p.label}`" class="enum-popup" @click.stop>
+                        <div v-for="opt in p.options" :key="opt" class="enum-option"
+                             :class="{ 'is-selected': p.value === opt }" @click="selectOption(element, p, opt)">{{
+                            opt
+                          }}
                         </div>
                       </div>
                     </div>
-
-                    <input
-                        v-else-if="p.type === 'number'"
-                        type="text"
-                        step="any"
-                        v-model.number="p.value"
-                        class="param-input"
-                        :style="{ borderBottomColor: element.category?.color || '#888' }"
-                        @input="updateLines"
-                    />
-
-                    <input
-                        v-else
-                        type="text"
-                        v-model="p.value"
-                        class="param-input"
-                        :style="{ borderBottomColor: element.category?.color || '#888' }"
-                        @input="updateLines"
-                    />
+                    <input v-else type="text" v-model="p.value" class="param-input"
+                           :disabled="!p.isChoice && (element.lockEdit || core.isCodeLocked.value)"
+                           @input="canvas.updateLines"/>
                   </div>
                 </template>
 
-                <template v-if="flatCodeInfo.generatedMap.get(element.id)?.length > 0">
-                  <div class="param-box" style="margin-left: auto;">
-                    <button class="toggle-btn" @click.stop="element._collapsed = !element._collapsed">
+                <template v-if="core.flatCodeInfo.value.generatedMap.get(element.id)?.length > 0">
+                  <div class="param-box template-controls">
+                    <button v-if="!element.lockEdit && !core.isCodeLocked.value" class="toggle-btn unwrap-btn" @click.stop="unwrapTemplate(index)">unwrap</button>
+                    <button class="toggle-btn" @click.stop="toggleOperations(element)">
                       {{ element._collapsed ? 'show operations' : 'hide operations' }}
                     </button>
                   </div>
 
                   <div v-if="!element._collapsed" class="sub-blocks-container">
-                    <LogicElement
-                        v-for="(genBlock, gIdx) in flatCodeInfo.generatedMap.get(element.id)"
-                        :key="gIdx"
-                        :type="genBlock"
-                        :title="genBlock.command"
-                        :color="getCommandColor(genBlock.command)"
-                        :index="(flatCodeInfo.itemToFlatMap.get(element.id)?.start || 0) + gIdx"
-                        :control="true"
-                        class="mini-logic-element"
-                        :class="{'is-mini-executing': activeExecutingIndex === index && activeSubIndex === gIdx}"
+                    <div
+                        v-for="(genBlock, gIdx) in core.flatCodeInfo.value.generatedMap.get(element.id)"
+                        :key="genBlock.id"
+                        :ref="el => canvas.setItemRef(el, genBlock.id)"
+                        :data-item-id="genBlock.id"
+                        class="sub-block-wrapper"
                     >
-                      <div class="params-row mini-params-row">
-                        <div v-for="(gp, pIdx) in genBlock.params" :key="pIdx" class="param-box">
-                          <span v-if="gp.label" class="param-label">{{ gp.label }}:</span>
-                          <div
-                              class="param-input disabled-input"
-                              :style="{ borderBottomColor: getCommandColor(genBlock.command) }"
-                          >
-                            {{ gp.value }}
+                      <LogicElement
+                          :type="genBlock"
+                          :title="genBlock.command"
+                          :color="core.getCommandColor(genBlock.command)"
+                          :index="(core.flatCodeInfo.value.itemToFlatMap.get(element.id)?.start || 0) + gIdx"
+                          :control="false"
+                          class="mini-logic-element processor-block"
+                          :class="{
+                          'is-mini-executing': core.activeExecutingIndex.value === index && core.activeSubIndex.value === gIdx,
+                          'is-drop-target': genBlock.id === canvas.arrowDrag.value.hoveredItemId
+                        }"
+                      >
+                        <div class="params-row mini-params-row">
+                          <div v-for="(gp, pIdx) in genBlock.params" :key="pIdx" class="param-box">
+                            <span v-if="gp.label" class="param-label">{{ gp.label }}:</span>
+                            <div class="param-input disabled-input">{{ gp.value }}</div>
                           </div>
                         </div>
-                      </div>
-                    </LogicElement>
+                      </LogicElement>
+                    </div>
                   </div>
                 </template>
 
               </div>
             </LogicElement>
-            <div class="insert-zone" @click.stop="openAddMenu(index + 1)">
-              <div class="insert-line"></div>
-              <button class="insert-btn">+</button>
-            </div>
+            <InsertZone v-if="!core.isCodeLocked.value && !isBetweenConnectLocked(index)" @add="openAddMenu(index + 1)"/>
           </div>
         </template>
       </draggable>
+
+      <!-- Оформление задания (полые рамки без заливки фона) -->
+      <div v-if="core.testCases.value.length > 0" class="task-logic-wrapper">
+        <LogicElement
+            :index="`${core.testCases.value.filter(t => t.passed).length} / ${core.testCases.value.length}`"
+            :title="taskTitle || 'Проверка задания'"
+            color="#f7ce74"
+            :control="false"
+        >
+          <div class="task-body">
+            <div class="test-rows-container">
+              <div
+                  v-for="(tc, idx) in core.testCases.value"
+                  :key="idx"
+                  class="task-test-row"
+                  :class="{ 'is-passed': tc.passed }"
+              >
+                <span class="test-status-symbol">{{ tc.passed ? 'готово' : 'нет' }}</span>
+                <span class="test-desc-text">{{ tc.customMessage || tc.expression }}</span>
+                <span class="test-row-value">{{ tc.currentValue || 'нет данных' }}</span>
+              </div>
+            </div>
+
+            <div class="task-status-bar" :class="{ 'all-passed': core.allTestsPassed.value }">
+              {{ core.allTestsPassed.value ? 'задание выполнено' : 'ожидание запуска' }}
+            </div>
+
+            <div v-if="lesson && lessonSolved" class="task-saved-bar">
+              Урок засчитан, прогресс сохранён в браузере
+            </div>
+          </div>
+        </LogicElement>
+      </div>
+
     </ClientOnly>
 
     <Teleport to="body">
-      <div v-if="showVars" class="vars-fullscreen-overlay">
-        <Vars :asm="asm" @close="showVars = false" />
+      <div v-if="core.showVars.value" class="vars-fullscreen-overlay">
+        <Vars :asm="core.asm.value" @close="core.showVars.value = false"/>
       </div>
-
-      <div v-if="showMocks" class="vars-fullscreen-overlay" style="overflow-y: auto;" @click.self="showMocks = false">
-        <Mock :world="world" @close="showMocks = false" />
+      <div v-if="core.showMocks.value" class="vars-fullscreen-overlay" style="overflow-y: auto;"
+           @click.self="core.showMocks.value = false">
+        <Mock :world="core.world" @close="core.showMocks.value = false"/>
       </div>
-
-      <div v-if="showAddMenu" class="vars-fullscreen-overlay" @click.self="showAddMenu = false">
-        <Add @select="handleAddCommand" @close="showAddMenu = false" />
+      <div v-if="core.showAddMenu.value" class="vars-fullscreen-overlay" @click.self="core.showAddMenu.value = false">
+        <Add @select="handleAddCommand" @close="core.showAddMenu.value = false"/>
       </div>
-
       <div ref="multiDragImageRef" class="multi-drag-image-container">
-        <div class="multi-drag-card">
-          Перемещение {{ selectedIds.size }} блоков...
-        </div>
+        <div class="multi-drag-card">Перемещение {{ core.selectedIds.value.size }} блоков...</div>
       </div>
     </Teleport>
   </div>
 </template>
 
 <script setup>
-import { defineAsyncComponent, triggerRef, ref, shallowRef, computed, onMounted, nextTick, onUnmounted, watch, reactive } from 'vue'
+import {defineAsyncComponent, ref, onMounted, onUnmounted, nextTick, computed, watch} from 'vue'
+import {useData} from 'vitepress'
+
 const draggable = defineAsyncComponent(() => import('vuedraggable'))
-import LogicElement from './LogicElement.vue'
-import { Asm } from './asm.js';
-import Vars from './Vars.vue';
-import Add from './Add.vue';
-import { compileMath } from './compiler.js';
-import { Parser } from "./parser.js";
-import Mock from "./Mock.vue";
-import {cats} from "./sttms";
 
-const showAddMenu = ref(false);
-const showMocks = ref(false);
-const insertIndex = ref(-1);
-
-const asm = shallowRef(new Asm());
-const world = reactive(asm.value.world);
-
-const containerRef = ref(null);
-const items = ref([]);
-const itemRefs = new Map();
-const connectionPaths = shallowRef([]);
-const containerHeight = ref(0);
-const contentSource = ref(null);
-const hoveredIndex = ref(null);
-const isDragging = ref(false);
-const activePopup = ref(null);
-const showVars = ref(false);
-const isAutoRunning = ref(false);
-let autoTimer = null;
-
-let rafId = null;
-
-const selectedIds = ref(new Set());
-let lastSelectedId = null;
-const primaryDragId = ref(null);
-
-let isMultiDrag = false;
-let selectedItemsOrderOnDragStart =[];
-let justDropped = false;
-
-const multiDragImageRef = ref(null);
-
-const settings = reactive({
-  ips: 5,
-  max_lines: 1000,
-  max_jumpes: 500
-});
-
-const getCommandColor = (cmd) => {
-  const operations =['set', 'op', 'lookup', 'packcolor'];
-  const control = ['jump', 'end', 'wait', 'stop', 'label'];
-  const io =['read', 'write', 'print', 'printflush', 'getlink', 'control', 'radar', 'sensor'];
-  const unit =['ubind', 'ucontrol', 'uradar', 'ulocate'];
-  const world =['getblock', 'setblock', 'spawn', 'status', 'spawnwave', 'setrule', 'message', 'cutscene', 'effect', 'explosion', 'setrate', 'fetch', 'sync', 'getflag', 'setflag', 'makemarker'];
-
-  if (operations.includes(cmd)) return '#877bad';
-  if (control.includes(cmd)) return '#6bb2b2';
-  if (io.includes(cmd)) return '#a08a8a';
-  if (unit.includes(cmd)) return '#c7b59d';
-  if (world.includes(cmd)) return '#6b84d4';
-  return '#777777';
-};
-
-const flatCodeInfo = computed(() => {
-  const flat =[];
-  const itemToFlatMap = new Map();
-  const generatedMap = new Map();
-  let flatIndex = 0;
-
-  items.value.forEach((item) => {
-    if (item.command === 'math') {
-      const target = item.params[0].value || 'result';
-      const expr = item.params[1].value || '';
-      const generated = compileMath(target, expr);
-
-      generatedMap.set(item.id, generated);
-
-      const startIndex = flatIndex;
-      if (generated.length === 0) {
-        flat.push({
-          command: 'set',
-          params:[{ value: 'null' }, { value: 'null' }],
-          id: `${item.id}_sub_0`,
-          _parentId: item.id,
-          _isFirst: true,
-          _subIndex: 0
-        });
-        flatIndex++;
-      } else {
-        generated.forEach((genBlock, idx) => {
-          flat.push({
-            ...genBlock,
-            id: `${item.id}_sub_${idx}`,
-            _parentId: item.id,
-            _isFirst: idx === 0,
-            _subIndex: idx
-          });
-          flatIndex++;
-        });
-      }
-      itemToFlatMap.set(item.id, { start: startIndex, end: flatIndex - 1, count: generated.length || 1 });
-    } else {
-      flat.push({ ...item, _parentId: item.id, _isFirst: true, _subIndex: 0 });
-      itemToFlatMap.set(item.id, { start: flatIndex, end: flatIndex, count: 1 });
-      flatIndex++;
-    }
-  });
-
-  return { flat, itemToFlatMap, generatedMap };
-});
-
-watch(() => flatCodeInfo.value.flat, (newFlatCode) => {
-  asm.value.compile(newFlatCode);
-  triggerRef(asm);
-}, { deep: true });
-
-const activeExecutingIndex = computed(() => {
-  if (!flatCodeInfo.value.flat || flatCodeInfo.value.flat.length === 0) return -1;
-
-  let currFlatIndex = asm.value.current;
-  if (currFlatIndex === undefined || currFlatIndex === null || currFlatIndex < 0) currFlatIndex = 0;
-
-  if (currFlatIndex >= flatCodeInfo.value.flat.length) currFlatIndex = 0;
-
-  const flatBlock = flatCodeInfo.value.flat[currFlatIndex];
-  if (flatBlock && flatBlock._parentId) {
-    return items.value.findIndex(i => i.id === flatBlock._parentId);
-  }
-  return -1;
-});
-
-const displayIndices = computed(() => {
-  const indices =[];
-  const { itemToFlatMap } = flatCodeInfo.value;
-
-  items.value.forEach((item) => {
-    if (item.command === 'label') {
-      indices.push('');
-      return;
-    }
-    const mapping = itemToFlatMap.get(item.id);
-    if (mapping && mapping.count > 1) {
-      indices.push(`${mapping.start}-${mapping.end}`);
-    } else if (mapping) {
-      indices.push(mapping.start);
-    } else {
-      indices.push('?');
-    }
-  });
-  return indices;
-});
-
-const activeSubIndex = computed(() => {
-  if (!flatCodeInfo.value.flat || flatCodeInfo.value.flat.length === 0) return -1;
-  let curr = asm.value.current || 0;
-  if (curr >= flatCodeInfo.value.flat.length) curr = 0;
-
-  const flatBlock = flatCodeInfo.value.flat[curr];
-  if (!flatBlock || !flatBlock._parentId) return -1;
-
-  return flatBlock._subIndex !== undefined ? flatBlock._subIndex : -1;
-});
-
-const onParamInput = (element, param) => {
-  if (element.command === 'label') {
-    items.value.forEach(it => {
-      if (it.command === 'jump') {
-        if (it._targetId === element.id) {
-          it.jumpDest = param.value;
-        } else if (String(it.jumpDest).trim() === param.value && !it._targetId) {
-          it._targetId = element.id;
-        }
-      }
-    });
-  }
-  updateLines();
-};
-
-const toggleSelection = (e, item) => {
-  if (justDropped) return;
-  if (['INPUT', 'BUTTON'].includes(e.target.tagName)) return;
-
-  if (e.ctrlKey || e.metaKey) {
-    if (selectedIds.value.has(item.id)) selectedIds.value.delete(item.id);
-    else selectedIds.value.add(item.id);
-    lastSelectedId = item.id;
-  } else if (e.shiftKey && lastSelectedId) {
-    const startIdx = items.value.findIndex(i => i.id === lastSelectedId);
-    const endIdx = items.value.findIndex(i => i.id === item.id);
-    if (startIdx !== -1 && endIdx !== -1) {
-      const min = Math.min(startIdx, endIdx);
-      const max = Math.max(startIdx, endIdx);
-      for (let i = min; i <= max; i++) {
-        selectedIds.value.add(items.value[i].id);
-      }
-    }
-  } else {
-    selectedIds.value.clear();
-    selectedIds.value.add(item.id);
-    lastSelectedId = item.id;
-  }
-};
-
-const deselectAll = () => {
-  selectedIds.value.clear();
-  lastSelectedId = null;
-};
-
-const copySelectedToClipboard = async () => {
-  const itemsToCopy = selectedIds.value.size > 0
-      ? items.value.filter(item => selectedIds.value.has(item.id))
-      : items.value;
-
-  if (itemsToCopy.length === 0) return;
-
-  const textToCopy = itemsToCopy.map(b => {
-    if (b.command === 'jump') return `jump ${b.jumpDest} ${b.params.map(p => p.value).join(' ')}`;
-    if (b.command === 'label') return `${b.params[0].value}:`;
-
-    if (b.command === 'math') {
-      const generated = flatCodeInfo.value.generatedMap.get(b.id);
-      if (generated && generated.length > 0) {
-        return generated.map(gen => `${gen.command} ${gen.params.map(p => p.value).join(' ')}`).join('\n');
-      }
-      return 'set null null';
-    }
-
-    return `${b.command} ${b.params.map(p => p.value).join(' ')}`;
-  }).join('\n');
-
-  try {
-    await navigator.clipboard.writeText(textToCopy);
-  } catch (err) {
-    console.error(err);
-  }
-};
-
-const pasteFromClipboard = async (targetIndex = -1) => {
-  try {
-    clearAll();
-    const text = await navigator.clipboard.readText();
-    if (!text.trim()) return;
-
-    const parser = new Parser(text);
-    parser.maxInstructions = settings.max_lines;
-    parser.maxJumps = settings.max_jumpes;
-    const newItems = parser.parse();
-
-    if (!newItems || newItems.length === 0) return;
-
-    let insertPos = items.value.length;
-    if (targetIndex !== -1) {
-      insertPos = targetIndex;
-    } else if (selectedIds.value.size > 0) {
-      let maxIdx = -1;
-      items.value.forEach((item, idx) => {
-        if (selectedIds.value.has(item.id) && idx > maxIdx) maxIdx = idx;
-      });
-      insertPos = maxIdx + 1;
-    }
-
-    newItems.forEach(i => i._collapsed = false);
-    items.value.splice(insertPos, 0, ...newItems);
-
-    selectedIds.value.clear();
-    newItems.forEach(i => selectedIds.value.add(i.id));
-
-    nextTick(() => {
-      onListChange();
-    });
-  } catch (err) {
-    console.error(err);
-  }
-};
-
-const clearAll = () => {
-  if (confirm('Вы уверены, что хотите очистить весь холст?')) {
-    items.value =[];
-    selectedIds.value.clear();
-    nextTick(onListChange);
-
-    updateLines();
-  }
-};
-
-const handleGlobalKeydown = (e) => {
-  if (['INPUT', 'TEXTAREA'].includes(e.target.tagName)) return;
-
-  if (e.ctrlKey || e.metaKey) {
-    if (e.key === 'c' || e.key === 'C') {
-      e.preventDefault();
-      copySelectedToClipboard();
-    }
-    if (e.key === 'v' || e.key === 'V') {
-      e.preventDefault();
-      pasteFromClipboard();
-    }
-    if (e.key === 'a' || e.key === 'A') {
-      e.preventDefault();
-      items.value.forEach(i => selectedIds.value.add(i.id));
-    }
-  } else if (e.key === 'Delete' || e.key === 'Backspace') {
-    if (selectedIds.value.size > 0) {
-      e.preventDefault();
-      items.value = items.value.filter(i => !selectedIds.value.has(i.id));
-      selectedIds.value.clear();
-      nextTick(onListChange);
-    }
-  } else if (e.key === 'Escape') {
-    deselectAll();
-    closePopup();
-  }
-};
-
-const openAddMenu = (index) => {
-  insertIndex.value = index;
-  showAddMenu.value = true;
-};
-
-const handleAddCommand = (commandName) => {
-  const newItem = createNewElement(commandName,[]);
-  items.value.splice(insertIndex.value, 0, newItem);
-  showAddMenu.value = false;
-  nextTick(onListChange);
-};
-
-const goToCurrent = () => {
-  const currentIndex = activeExecutingIndex.value;
-  const currentItem = items.value[currentIndex];
-  if (currentItem) {
-    const el = itemRefs.get(currentItem.id);
-    if (el) {
-      el.scrollIntoView({ behavior: 'smooth', block: 'center' });
-    }
-  }
-};
-
-const testMaxIps = async () => {
-  const testCount = 1000;
-  const startTime = performance.now();
-  for (let i = 0; i < testCount; i++) {
-    asm.value.next();
-  }
-  const endTime = performance.now();
-  const timeTakenMs = endTime - startTime;
-  const maxIps = Math.floor((testCount / timeTakenMs) * 1000);
-  console.log(`${timeTakenMs.toFixed(2)}`);
-  console.log(`${maxIps}`);
-};
-
-window.test = testMaxIps;
-
-const runAuto = () => {
-  if (!isAutoRunning.value) return;
-
-  const targetIps = Math.max(0.01, settings.ips);
-
-  if (targetIps <= 60) {
-    asm.value.next();
-    triggerRef(asm);
-    autoTimer = setTimeout(runAuto, 1000 / targetIps);
-  } else {
-    const opsPerFrame = Math.ceil(targetIps / 60);
-
-    for (let i = 0; i < opsPerFrame; i++) {
-      asm.value.next();
-    }
-
-    triggerRef(asm);
-
-    if (isAutoRunning.value) {
-      rafId = requestAnimationFrame(runAuto);
-    }
-  }
-};
-
-const toggleAuto = () => {
-  isAutoRunning.value = !isAutoRunning.value;
-  if (isAutoRunning.value) {
-    runAuto();
-  } else {
-    clearTimeout(autoTimer);
-    cancelAnimationFrame(rafId);
-  }
-};
-
-watch(() => settings.ips, (newIps) => {
-  if (isAutoRunning.value) {
-    clearTimeout(autoTimer);
-    const safeIps = Math.max(0.01, newIps);
-    autoTimer = setTimeout(runAuto, 1000 / safeIps);
-  }
-});
-
-const createNewElement = (cmd = 'set', args =[]) => {
-  if (cmd === 'math') {
-    return {
-      id: Math.random().toString(36).substr(2, 9),
-      command: 'math',
-      category: cats['template'],
-      _collapsed: false,
-      params:[
-        { label: 'target', type: 'text', value: args[0] !== undefined ? args[0] : 'result' },
-        { label: 'expr', type: 'text', value: args[1] !== undefined ? args[1] : 'a + b * 10' }
-      ]
-    };
-  }
-  const p = new Parser("");
-  const item = p.createItemObject(cmd, args);
-  item._collapsed = false;
-  return item;
-};
-
-const resetSettings = () => {
-  settings.ips = 0.3;
-  settings.max_lines = 1000;
-  settings.max_jumpes = 500;
-};
-
-const next = async (shouldScroll = false) => {
-  const oldIndex = activeExecutingIndex.value;
-  const oldItem = items.value[oldIndex];
-  const oldEl = oldItem ? itemRefs.get(oldItem.id) : null;
-
-  asm.value.next();
-  triggerRef(asm);
-  await nextTick();
-
-  if (!shouldScroll) return;
-
-  const newIndex = activeExecutingIndex.value;
-  const newItem = items.value[newIndex];
-  const newEl = newItem ? itemRefs.get(newItem.id) : null;
-
-  if (oldEl && newEl && oldIndex !== newIndex) {
-    const oldVisualTop = oldEl.offsetTop;
-    const newVisualTop = newEl.offsetTop;
-    window.scrollBy({ top: newVisualTop - oldVisualTop, behavior: 'auto' });
-  }
+import LogicElement from './components/blocks/LogicElement.vue'
+import CanvasLines from './components/canvas/CanvasLines.vue'
+import Toolbars from './components/canvas/Toolbars.vue'
+import InsertZone from './components/blocks/InsertZone.vue'
+
+import Vars from './components/modals/VarsModal.vue'
+import Add from './components/modals/AddModal.vue'
+import Mock from './components/modals/MockModal.vue'
+
+import {useLogicCore} from './composables/useLogicCore.js'
+import {useLogicCanvas} from './composables/useLogicCanvas.js'
+import {useProgress} from './composables/useProgress.js'
+import {Parser} from './core/parser.js'
+import {templateRegistry} from './core/templates.js'
+
+import MathTemplate from './components/blocks/templates/MathTemplate.vue'
+import ChoiceTemplate from './components/blocks/templates/ChoiceTemplate.vue'
+
+const props = defineProps({
+  lesson: {type: String, default: ''}
+})
+
+const dynamicTemplates = {MathTemplate, ChoiceTemplate}
+const containerRef = ref(null)
+const contentSource = ref(null)
+const multiDragImageRef = ref(null)
+
+const {frontmatter} = useData()
+const taskTitle = computed(() => frontmatter.value?.title || '')
+
+const core = useLogicCore(() => canvas.updateLines())
+const canvas = useLogicCanvas(core, containerRef, multiDragImageRef)
+
+const {isSolved, markSolved} = useProgress()
+const lessonSolved = computed(() => isSolved(props.lesson))
+
+watch(core.allTestsPassed, (passed) => {
+  if (passed && props.lesson) markSolved(props.lesson)
+})
+
+const getTemplateProgress = (element, index) => {
+  if (core.activeExecutingIndex.value !== index) return 0
+  const generated = core.flatCodeInfo.value.generatedMap.get(element.id)
+  if (!generated || generated.length === 0) return 0
+  const subIndex = core.activeSubIndex.value
+  return (subIndex / generated.length) * 100
 }
 
-const arrowDrag = ref({
-  isDragging: false,
-  sourceIds:[],
-  x: 0,
-  y: 0,
-  hoveredItemId: null
-});
+const isConnected = (index) => canvas.connectionPaths.value.some(p => p.target === index || p.sources.includes(index))
 
-let blockRectsCache =[];
-
-const setItemRef = (el, id) => {
-  if (el) itemRefs.set(id, el);
-  else itemRefs.delete(id);
-}
-
-const togglePopup = (id) => activePopup.value = activePopup.value === id ? null : id;
-const closePopup = () => activePopup.value = null;
-
+const togglePopup = (id) => core.activePopup.value = core.activePopup.value === id ? null : id
 const selectOption = (element, param, opt) => {
   param.value = opt;
-  updateLines();
-  closePopup();
+  canvas.updateLines();
+  core.activePopup.value = null
 }
 
-const activePathIds = computed(() => {
-  const activeSet = new Set();
-  if (hoveredIndex.value === null) return activeSet;
-  connectionPaths.value.forEach((path, i) => {
-    if (path.target === hoveredIndex.value || path.sources.includes(hoveredIndex.value)) {
-      activeSet.add(i);
-    }
-  });
-  return activeSet;
-});
+const onJumpDestChange = (element) => {
+  const dest = String(element.jumpDest ?? '').trim()
+  const flat = core.flatCodeInfo.value.flat
 
-const connectedIndices = computed(() => {
-  const indices = new Set();
-  if (hoveredIndex.value === null) return indices;
-  connectionPaths.value.forEach(p => {
-    if (p.target === hoveredIndex.value) p.sources.forEach(s => indices.add(s));
-    else if (p.sources.includes(hoveredIndex.value)) indices.add(p.target);
-  });
-  return indices;
-});
+  const label = core.items.value.find(i => i.command === 'label' && i.params[0]?.value === dest)
 
-const startArrowDrag = (e, path) => {
-  arrowDrag.value.isDragging = true;
-  arrowDrag.value.sourceIds = path.sourceIds;
-
-  const rect = containerRef.value.getBoundingClientRect();
-  arrowDrag.value.x = e.clientX - rect.left;
-  arrowDrag.value.y = e.clientY - rect.top;
-
-  blockRectsCache = Array.from(itemRefs.entries()).map(([id, el]) => ({
-    id,
-    rect: el.getBoundingClientRect()
-  }));
-
-  window.addEventListener('pointermove', onArrowDragMove);
-  window.addEventListener('pointerup', onArrowDragEnd);
-  updateLines();
-};
-
-const onArrowDragMove = (e) => {
-  if (!arrowDrag.value.isDragging) return;
-  const rect = containerRef.value.getBoundingClientRect();
-  arrowDrag.value.x = e.clientX - rect.left;
-  arrowDrag.value.y = e.clientY - rect.top;
-
-  let foundId = null;
-  for (const cache of blockRectsCache) {
-    if (e.clientX >= cache.rect.left && e.clientX <= cache.rect.right &&
-        e.clientY >= cache.rect.top && e.clientY <= cache.rect.bottom) {
-      foundId = cache.id;
-      break;
-    }
-  }
-  arrowDrag.value.hoveredItemId = foundId;
-  updateLines();
-};
-
-const onArrowDragEnd = () => {
-  window.removeEventListener('pointermove', onArrowDragMove);
-  window.removeEventListener('pointerup', onArrowDragEnd);
-
-  if (arrowDrag.value.hoveredItemId) {
-    const targetIndex = items.value.findIndex(it => it.id === arrowDrag.value.hoveredItemId);
-    const targetItem = items.value[targetIndex];
-
-    if (targetIndex !== -1) {
-      items.value.forEach(item => {
-        if (arrowDrag.value.sourceIds.includes(item.id)) {
-          item._targetId = arrowDrag.value.hoveredItemId;
-          if (targetItem.command === 'label') {
-            item.jumpDest = targetItem.params[0].value;
-          } else {
-            item.jumpDest = displayIndices.value[targetIndex];
-          }
-        }
-      });
-    }
-  }
-
-  arrowDrag.value.isDragging = false;
-  arrowDrag.value.sourceIds =[];
-  arrowDrag.value.hoveredItemId = null;
-  blockRectsCache =[];
-  updateLines();
-};
-
-const updateLines = () => {
-  const offsets = new Map();
-  let maxBottom = 0;
-
-  items.value.forEach((item) => {
-    const el = itemRefs.get(item.id);
-    if (el) {
-      offsets.set(item.id, {
-        top: el.offsetTop,
-        height: el.offsetHeight,
-        width: el.offsetWidth,
-        left: el.offsetLeft
-      });
-      maxBottom = Math.max(maxBottom, el.offsetTop + el.offsetHeight);
-    }
-  });
-
-  const groups = new Map();
-  items.value.forEach((item, index) => {
-    if (item.command === 'jump' && (item._targetId || arrowDrag.value.sourceIds.includes(item.id))) {
-      let targetId = item._targetId;
-
-      if (arrowDrag.value.isDragging && arrowDrag.value.sourceIds.includes(item.id)) {
-        targetId = '__dragging__';
-      }
-
-      const targetIndex = items.value.findIndex(it => it.id === targetId);
-
-      if (targetIndex !== -1 || targetId === '__dragging__') {
-        if (!groups.has(targetId)) {
-          groups.set(targetId, {
-            targetId,
-            targetIndex: targetId === '__dragging__' ? -1 : targetIndex,
-            sources:[]
-          });
-        }
-        groups.get(targetId).sources.push({ id: item.id, index });
-      }
-    }
-  });
-
-  const lanes =[];
-  connectionPaths.value = Array.from(groups.values()).map(group => {
-    const isDragGroup = group.targetId === '__dragging__';
-    const firstSource = group.sources[0];
-    const sourceOff = offsets.get(firstSource.id);
-    if (!sourceOff) return null;
-
-    const blockRightEdge = sourceOff.left + sourceOff.width;
-    const sourceYs = group.sources.map(s => (offsets.get(s.id)?.top || 0) + 25);
-
-    let targetY, targetX;
-    if (isDragGroup) {
-      targetY = arrowDrag.value.y;
-      targetX = arrowDrag.value.x;
-    } else {
-      const tOff = offsets.get(group.targetId);
-      if (!tOff) return null;
-      targetY = tOff.top + 20;
-      targetX = tOff.left + tOff.width + 8;
-    }
-
-    const minY = Math.min(targetY, ...sourceYs);
-    const maxY = Math.max(targetY, ...sourceYs);
-
-    let laneIndex = 0;
-    if (!isDragGroup) {
-      while (true) {
-        const conflict = lanes[laneIndex]?.some(r => minY <= r.max && maxY >= r.min);
-        if (!conflict) {
-          if (!lanes[laneIndex]) lanes[laneIndex] = [];
-          lanes[laneIndex].push({ min: minY, max: maxY });
-          break;
-        }
-        laneIndex++;
-      }
-    }
-
-    const laneX = blockRightEdge + 30 + (laneIndex * 15);
-    let d = "";
-    group.sources.forEach(source => {
-      const sOff = offsets.get(source.id);
-      if (sOff) d += `M ${sOff.left + sOff.width} ${sOff.top + 25} L ${laneX} ${sOff.top + 25} `;
-    });
-    d += `M ${laneX} ${minY} L ${laneX} ${maxY} `;
-    d += `M ${laneX} ${targetY} L ${targetX} ${targetY}`;
-
-    return {
-      d,
-      target: group.targetIndex,
-      targetId: group.targetId,
-      sources: group.sources.map(s => s.index),
-      sourceIds: group.sources.map(s => s.id),
-      endX: targetX,
-      endY: targetY,
-      isDragging: isDragGroup
-    };
-  }).filter(Boolean);
-
-  containerHeight.value = maxBottom + 100;
-}
-
-const onJumpDestChange = (item) => {
-  const destStr = String(item.jumpDest).trim();
-
-  const targetLabel = items.value.find(
-      it => it.command === 'label' && it.params[0].value === destStr
-  );
-
-  if (targetLabel) {
-    item._targetId = targetLabel.id;
+  if (label) {
+    element._targetId = flat.find(f => f._parentId === label.id)?.id || null
   } else {
-    const idx = parseInt(destStr);
-    if (!isNaN(idx)) {
-      const targetIndex = displayIndices.value.indexOf(idx);
-      if (targetIndex !== -1) {
-        item._targetId = items.value[targetIndex].id;
-      } else {
-        item._targetId = null;
-      }
-    } else {
-      item._targetId = null;
-    }
-  }
-  updateLines();
-};
-
-const onListChange = (evt) => {
-  if (evt && evt.moved && isMultiDrag) {
-    const { newIndex } = evt.moved;
-
-    const nextUnselected = items.value.slice(newIndex + 1).find(i => !selectedIds.value.has(i.id));
-    const remainingItems = items.value.filter(i => !selectedIds.value.has(i.id));
-
-    let insertIndex = remainingItems.length;
-    if (nextUnselected) {
-      insertIndex = remainingItems.findIndex(i => i.id === nextUnselected.id);
-    }
-
-    remainingItems.splice(insertIndex, 0, ...selectedItemsOrderOnDragStart);
-    items.value = remainingItems;
-    isMultiDrag = false;
+    const index = parseInt(dest, 10)
+    element._targetId = (!isNaN(index) && flat[index]) ? flat[index].id : null
   }
 
-  items.value.forEach((item) => {
-    if (item.command === 'jump' && item._targetId) {
-      const currentTarget = items.value.find(it => it.id === item._targetId);
-      if (currentTarget) {
-        if (currentTarget.command === 'label') {
-          item.jumpDest = currentTarget.params[0].value;
-        } else {
-          const targetIndex = items.value.indexOf(currentTarget);
-          item.jumpDest = displayIndices.value[targetIndex];
-        }
-      } else {
-        item._targetId = null;
-      }
-    }
-  });
-  updateLines();
+  nextTick(canvas.updateLines)
 }
 
-const onSetData = (dataTransfer, dragEl) => {
-  const id = dragEl.getAttribute('data-item-id');
-  if (id && selectedIds.value.has(id) && selectedIds.value.size > 1) {
-    if (multiDragImageRef.value) {
-      const container = multiDragImageRef.value;
-      container.innerHTML = '';
-
-      container.style.width = `${dragEl.offsetWidth}px`;
-
-      const selectedItemsList = items.value.filter(i => selectedIds.value.has(i.id));
-      const maxToDisplay = 3;
-
-      selectedItemsList.slice(0, maxToDisplay).forEach((item, index) => {
-        const originalNode = itemRefs.get(item.id);
-        if (originalNode) {
-          const clone = originalNode.cloneNode(true);
-
-          clone.style.display = 'block';
-          clone.querySelectorAll('.insert-zone, .element-toolbar').forEach(el => el.remove());
-
-          clone.style.position = index === 0 ? 'relative' : 'absolute';
-          clone.style.top = index === 0 ? '0' : `${index * 8}px`;
-          clone.style.left = index === 0 ? '0' : `${index * 8}px`;
-          clone.style.width = '100%';
-          clone.style.zIndex = 10 - index;
-          clone.style.boxShadow = '0 5px 15px rgba(0,0,0,0.5)';
-
-          if (index > 0) clone.style.filter = `brightness(${1 - index * 0.2})`;
-
-          container.appendChild(clone);
-        }
-      });
-
-      if (selectedItemsList.length > maxToDisplay) {
-        const badge = document.createElement('div');
-        badge.className = 'multi-drag-badge';
-        badge.textContent = `+${selectedItemsList.length - maxToDisplay}`;
-        container.appendChild(badge);
-      }
-
-      dataTransfer.setDragImage(container, 20, 20);
-    }
-  }
-};
-
-const onDragStart = (evt) => {
-  isDragging.value = true;
-  const draggedElement = items.value[evt.oldIndex];
-
-  if (draggedElement) {
-    if (selectedIds.value.has(draggedElement.id)) {
-      if (selectedIds.value.size > 1) {
-        isMultiDrag = true;
-        primaryDragId.value = draggedElement.id;
-        selectedItemsOrderOnDragStart = items.value.filter(i => selectedIds.value.has(i.id));
-
-        selectedIds.value.forEach(id => {
-          if (id !== draggedElement.id) {
-            const el = itemRefs.get(id);
-            if (el) el.style.display = 'none';
-          }
-        });
-
-      } else {
-        isMultiDrag = false;
-        primaryDragId.value = draggedElement.id;
-      }
-    } else {
-      selectedIds.value.clear();
-      selectedIds.value.add(draggedElement.id);
-      lastSelectedId = draggedElement.id;
-      isMultiDrag = false;
-      primaryDragId.value = draggedElement.id;
-    }
-  }
-
-  const loop = () => {
-    updateLines();
-    if (isDragging.value) rafId = requestAnimationFrame(loop);
-  };
-  rafId = requestAnimationFrame(loop);
+const resetSettings = () => {
+  core.settings.ips = 0.3;
+  core.settings.max_lines = 1000;
+  core.settings.max_jumpes = 500
 }
-
-const onDragEnd = () => {
-  isDragging.value = false;
-
-  selectedIds.value.forEach(id => {
-    const el = itemRefs.get(id);
-    if (el) el.style.display = '';
-  });
-
-  isMultiDrag = false;
-  primaryDragId.value = null;
-  cancelAnimationFrame(rafId);
-
-  justDropped = true;
-  setTimeout(() => justDropped = false, 150);
-
-  setTimeout(updateLines, 1);
+const openAddMenu = (index) => {
+  core.insertIndex.value = index;
+  core.showAddMenu.value = true
+}
+const handleAddCommand = (cmd) => {
+  core.items.value.splice(core.insertIndex.value, 0, core.createNewElement(cmd, []))
+  core.showAddMenu.value = false
+  nextTick(canvas.updateLines)
 }
 
 const removeItem = (id) => {
-  items.value = items.value.filter(i => i.id !== id);
-  selectedIds.value.delete(id);
-  nextTick(onListChange);
+  core.items.value = core.items.value.filter(i => i.id !== id)
+  core.selectedIds.value.delete(id)
+  nextTick(canvas.updateLines)
 }
 
-const addItem = (index) => {
-  const newItem = createNewElement('set',[]);
-  items.value.splice(index + 1, 0, newItem);
-  nextTick(onListChange);
-}
-
-const copyItem = (index, event) => {
-  if (event instanceof Event) return;
-
-  const source = items.value[index];
-  const newItem = createNewElement(source.command, source.params.map(p => p.value));
+const copyItem = (index) => {
+  const source = core.items.value[index]
+  const newItem = core.createNewElement(source.command, source.params.map(p => p.value))
   newItem.jumpDest = source.jumpDest;
-  newItem._targetId = source._targetId;
-  items.value.splice(index + 1, 0, newItem);
-  nextTick(onListChange);
+  newItem._targetId = source._targetId
+  core.items.value.splice(index + 1, 0, newItem)
+  nextTick(canvas.updateLines)
+}
+
+const unwrapTemplate = (index) => {
+  const item = core.items.value[index]
+  const generated = core.flatCodeInfo.value.generatedMap.get(item.id)
+
+  let newBlocks = []
+  if (generated && generated.length > 0) {
+    newBlocks = generated.map(gen => ({
+      ...gen,
+      id: gen.id,
+      params: gen.params.map(p => ({...p})),
+      _collapsed: false,
+      jumpDest: gen.jumpDest || '',
+      _targetId: gen._targetId || null
+    }))
+  } else {
+    newBlocks = [core.createNewElement('set', ['null', 'null'])]
+    newBlocks[0].id = `${item.id}_sub_0`
+  }
+
+  core.items.value.splice(index, 1, ...newBlocks)
+  core.selectedIds.value.delete(item.id)
+  nextTick(canvas.updateLines)
+}
+
+const toggleOperations = (element) => {
+  element._collapsed = !element._collapsed
+  nextTick(canvas.updateLines)
+}
+
+const toggleSelection = (e, item) => {
+  if (canvas.justDropped || ['INPUT', 'BUTTON'].includes(e.target.tagName)) return
+
+  // Строго запрещаем интерактивное выделение блоков с блокировкой перемещения
+  if (item.lockMove) return
+
+  if (e.ctrlKey || e.metaKey) {
+    core.selectedIds.value.has(item.id) ? core.selectedIds.value.delete(item.id) : core.selectedIds.value.add(item.id)
+    core.lastSelectedId = item.id
+  } else if (e.shiftKey && core.lastSelectedId) {
+    const min = Math.min(core.items.value.findIndex(i => i.id === core.lastSelectedId), core.items.value.findIndex(i => i.id === item.id))
+    const max = Math.max(core.items.value.findIndex(i => i.id === core.lastSelectedId), core.items.value.findIndex(i => i.id === item.id))
+    for (let i = min; i <= max; i++) {
+      const it = core.items.value[i]
+      if (it && !it.lockMove) {
+        core.selectedIds.value.add(it.id)
+      }
+    }
+  } else {
+    // Если блок уже выделен и является ЕДИНСТВЕННЫМ выделенным блоком - снимаем выделение!
+    if (core.selectedIds.value.has(item.id) && core.selectedIds.value.size === 1) {
+      core.selectedIds.value.clear()
+      core.lastSelectedId = null
+    } else {
+      core.selectedIds.value.clear()
+      core.selectedIds.value.add(item.id)
+      core.lastSelectedId = item.id
+    }
+  }
 }
 
 const handleGlobalClick = (e) => {
-  if (!e.target.closest('.element-wrapper') && !e.target.closest('.btn-reset')) {
-    deselectAll();
+  if (!e.target.closest('.element-wrapper') && !e.target.closest('.btn-reset')) core.selectedIds.value.clear()
+  core.activePopup.value = null
+}
+
+const handleKeydown = (e) => {
+  if (['INPUT', 'TEXTAREA'].includes(e.target.tagName)) return
+  if (e.ctrlKey || e.metaKey) {
+    if (e.key.toLowerCase() === 'c') {
+      e.preventDefault();
+      core.copySelected()
+    }
+    if (e.key.toLowerCase() === 'v') {
+      e.preventDefault();
+      core.pasteClipboard()
+    }
+    if (e.key.toLowerCase() === 'a') {
+      e.preventDefault();
+      // Выделяем все элементы за исключением блоков с залоченным перемещением
+      core.items.value.forEach(i => {
+        if (!i.lockMove) {
+          core.selectedIds.value.add(i.id)
+        }
+      })
+    }
+  } else if (e.key === 'Delete' || e.key === 'Backspace') {
+    if (core.selectedIds.value.size > 0) {
+      e.preventDefault();
+      core.items.value = core.items.value.filter(i => !core.selectedIds.value.has(i.id))
+      core.selectedIds.value.clear();
+      nextTick(canvas.updateLines)
+    }
+  } else if (e.key === 'Escape') {
+    core.selectedIds.value.clear();
+    core.activePopup.value = null
   }
 }
 
-onMounted(async () => {
-  window.addEventListener('click', closePopup);
-  window.addEventListener('click', handleGlobalClick);
-  window.addEventListener('keydown', handleGlobalKeydown);
-  window.addEventListener('resize', updateLines);
+// Методы-проверки наличия соседней блокировки связей для мультирамки
+const isNextConnectLocked = (index) => {
+  const current = core.items.value[index]
+  const next = core.items.value[index + 1]
+  return current && current.lockConnect && next && next.lockConnect
+}
 
-  await nextTick();
+const isPrevConnectLocked = (index) => {
+  const current = core.items.value[index]
+  const prev = core.items.value[index - 1]
+  return current && current.lockConnect && prev && prev.lockConnect
+}
 
-  if (contentSource.value) {
-    const text = contentSource.value.textContent;
-    if (text?.trim()) {
-      const parser = new Parser(text);
-      parser.maxInstructions = settings.max_lines;
-      parser.maxJumps = settings.max_jumpes;
+const isBetweenConnectLocked = (index) => {
+  const current = core.items.value[index]
+  const next = core.items.value[index + 1]
+  return current && current.lockConnect && next && next.lockConnect
+}
 
-      const newList = parser.parse();
-      newList.forEach(i => i._collapsed = false);
-      items.value = newList;
+// Запрещает перетаскивать drag-locked элементы и вставлять сторонние блоки внутрь соединенных рамкой
+const onMove = (evt) => {
+  const draggedItem = evt.draggedContext.element
+  if (draggedItem && draggedItem.lockMove) {
+    return false
+  }
 
-      setTimeout(updateLines, 100);
+  const relatedIndex = evt.relatedContext.index
+  const willInsertAfter = evt.willInsertAfter
+
+  if (willInsertAfter) {
+    const current = core.items.value[relatedIndex]
+    const next = core.items.value[relatedIndex + 1]
+    if (current?.lockConnect && next?.lockConnect) {
+      return false
+    }
+  } else {
+    const prev = core.items.value[relatedIndex - 1]
+    const current = core.items.value[relatedIndex]
+    if (prev?.lockConnect && current?.lockConnect) {
+      return false
     }
   }
-});
+  return true
+}
+
+onMounted(() => {
+  window.addEventListener('resize', canvas.updateLines)
+
+  if (contentSource.value) {
+    const worldElement = contentSource.value.querySelector('world')
+
+    if (worldElement) {
+      const mockEl = worldElement.querySelector('.language-mock pre') || worldElement.querySelector('pre.mock')
+      const codeEl = worldElement.querySelector('.language-code pre') || worldElement.querySelector('.language-logic pre') || worldElement.querySelector('pre.code')
+      const testsEl = worldElement.querySelector('.language-tests pre') || worldElement.querySelector('.language-tasks pre') || worldElement.querySelector('pre.tests')
+
+      const cleanText = (el) => {
+        if (!el) return ''
+        return el.textContent.replace(/\u00A0/g, ' ')
+      }
+
+      const mockText = cleanText(mockEl)
+      const codeText = cleanText(codeEl)
+      const testsText = cleanText(testsEl)
+
+      if (mockText.trim()) {
+        core.setupMockEnvironment(mockText)
+      }
+
+      if (codeText.trim()) {
+        const parser = new Parser(codeText)
+        parser.maxInstructions = core.settings.max_lines
+        parser.maxJumps = core.settings.max_jumpes
+        core.items.value = parser.parse()
+        core.items.value.forEach(i => i._collapsed = false)
+      }
+
+      if (testsText.trim()) {
+        core.parseTests(testsText)
+      }
+    } else {
+      const fallbackText = contentSource.value.textContent
+      if (fallbackText?.trim()) {
+        const parser = new Parser(fallbackText)
+        parser.maxInstructions = core.settings.max_lines
+        parser.maxJumps = core.settings.max_jumpes
+        core.items.value = parser.parse()
+        core.items.value.forEach(i => i._collapsed = false)
+      }
+    }
+
+    setTimeout(canvas.updateLines, 100)
+  }
+})
 
 onUnmounted(() => {
-  window.removeEventListener('resize', updateLines);
-  window.removeEventListener('click', closePopup);
-  window.removeEventListener('click', handleGlobalClick);
-  window.removeEventListener('keydown', handleGlobalKeydown);
-  cancelAnimationFrame(rafId);
-  clearTimeout(autoTimer);
-});
+  window.removeEventListener('resize', canvas.updateLines);
+  core.stopEngine()
+})
 </script>
 
 <style scoped>
-.logic-canvas { min-height: 100vh; }
-.connections-layer { position: absolute; top: 0; left: 0; width: 100%; pointer-events: none; z-index: 2; overflow: visible; }
-.jump-line { transition: stroke 0.2s; }
-.element-wrapper { margin-bottom: 8px; position: relative; transition: opacity 0.2s; }
-.ghost-item { opacity: 0.6 !important; filter: drop-shadow(0 0 5px rgba(140, 107, 237, 0.4)); outline: 2px dashed #8c6bed !important; outline-offset: -2px; }
-.element-toolbar { position: absolute; top: 0; left: -50px; z-index: 40; display: flex; justify-content: center; align-items: center; flex-direction: column; gap: 2px; background: rgba(0, 0, 0, 0.5); border-radius: 10px; padding: 4px 6px; }
-.element-toolbar button { background: transparent; border: 0; color: white; cursor: pointer; font-size: 14px; padding: 2px 3px; border-radius: 9px; transition: all 0.2s; display: flex; align-items: center; justify-content: center; }
-.element-toolbar button:hover { box-shadow: inset 0 0 5px #a3d2ff; transform: translateY(-1px); }
-.is-arrow-dragging, .is-arrow-dragging * { cursor: grabbing !important; }
-:deep(.is-drop-target) { outline: 2px #f7ce74 !important; outline-offset: 3px; box-shadow: 0 0 10px rgba(247, 206, 116, 0.5); transition: outline 0.1s, box-shadow 0.1s; }
-:deep(.is-executing) { outline: 2px solid #b8d8be !important; outline-offset: 2px; z-index: 10; transform-origin: left center; transition: transform 0.2s ease-out, outline 0.2s, box-shadow 0.2s; }
-:deep(.is-selected-block) { outline: 2px solid #8c6bed !important; outline-offset: 2px; background-color: rgba(140, 107, 237, 0.15) !important; border-radius: 6px; }
-:deep(.is-label) { filter: saturate(0.5); }
-.params-row { display: flex; gap: 12px; flex-wrap: wrap; padding: 4px; }
-.param-box { display: flex; align-items: center; }
-.param-label { font-size: 18px; }
-.param-input { background: transparent; border: none; border-bottom: 4px solid; color: white; padding: 2px; font-size: 18px; font-family: inherit; margin-left: 6px; outline: none; min-width: 40px; max-width: 140px; opacity: 0.8; }
-.jump-dest-input { border-bottom-color: #f7ce74 !important; width: 50px; color: #f7ce74; font-weight: bold; }
-.custom-select-wrapper { position: relative; }
-.enum-popup { position: absolute; top: 100%; left: 0; margin-top: 4px; background: #000; border: 4px solid #4a4a4a; display: grid; grid-template-columns: 1fr 1fr; z-index: 100; min-width: 180px; }
-.enum-option { color: #fff; padding: 8px; cursor: pointer; text-align: center; text-shadow: 1px 1px 1px black, -1px 1px 1px black, -1px -1px 1px black, 1px -1px 1px black; }
-.enum-option:hover { background: rgba(255,255,255,0.1); }
-.enum-option.is-selected { background: #f7ce74; }
-.btn-reset { background-color: transparent; color: #8c6bed; border: 4px solid #8c6bed; padding: 4px 12px; font-size: 16px; font-family: inherit; font-weight: bold; cursor: pointer; transition: all 0.2s; }
-.btn-reset:hover { background-color: #8c6bed; border-color: #343333; color: #fff; box-shadow: 0 0 8px rgba(140, 107, 237, 0.6); }
-.btn-reset:active { transform: translateY(2px); }
-.vars-fullscreen-overlay { position: fixed; top: 0; left: 0; width: 100vw; height: 100vh; background-color: rgba(15, 15, 15, 0.95); z-index: 9999; display: flex; flex-direction: column; backdrop-filter: blur(5px); }
-.btn-auto-active { background-color: rgba(99, 53, 248, 0.4) !important; color: #fff !important; box-shadow: inset 0 0 5px #8c6bed !important; border: 1px solid #8c6bed !important; }
-.insert-zone { position: absolute; left: 0; width: 100%; height: 20px; display: flex; align-items: center; justify-content: center; opacity: 0; z-index: 45; cursor: pointer; transition: opacity 0.2s; bottom: -14px; }
-.is-dragging .insert-zone, .is-arrow-dragging .insert-zone { display: none; }
-.insert-zone:hover { opacity: 1; }
-.insert-line { position: absolute; width: 100%; height: 2px; background-color: #8c6bed; z-index: 1; }
-.insert-btn { position: relative; z-index: 2; background: #8c6bed; color: white; border: 2px solid #1a1a1a; border-radius: 50%; width: 24px; height: 24px; display: flex; align-items: center; justify-content: center; font-weight: bold; font-size: 16px; cursor: pointer; transition: transform 0.2s; box-shadow: 0 0 8px rgba(140, 107, 237, 0.4); }
-.insert-btn:hover { transform: scale(1.2); background-color: #a38bf5; }
-.multi-drag-image-container { position: absolute; top: -9999px; left: -9999px; z-index: -9999; opacity: 1; pointer-events: none; }
-:deep(.multi-drag-badge) { position: absolute; bottom: -15px; right: -15px; background-color: #f7ce74; color: #1a1a1a; font-weight: bold; font-size: 16px; padding: 4px 10px; border-radius: 20px; border: 3px solid #1a1a1a; z-index: 20; box-shadow: 0 4px 8px rgba(0,0,0,0.5); }
-.sub-blocks-container { width: 100%; margin-top: 6px; display: flex; flex-direction: column; }
-.mini-logic-element { margin: 2px 0 !important; padding: 4px 6px !important; font-size: 14px !important; opacity: 0.9; transition: all 0.2s ease-out; }
-.mini-logic-element :deep(.code) { padding: 4px !important; }
-.mini-logic-element :deep(.addimg), .mini-logic-element :deep(.copyimg), .mini-logic-element :deep(.exitimg) { display: none !important; }
-.mini-params-row { gap: 8px !important; padding: 0 !important; }
-.mini-params-row .param-label { font-size: 14px; }
-.mini-params-row .disabled-input { font-size: 14px !important; padding: 0 4px; min-width: auto; pointer-events: none; }
-.is-mini-executing { opacity: 1; transform: translateX(8px); outline: 2px solid #b8d8be !important; outline-offset: 1px; box-shadow: 0 4px 10px rgba(184, 216, 190, 0.2); z-index: 5; }
-.is-mini-executing .disabled-input { color: #f7ce74; }
-.toggle-btn { background-color: transparent; color: #f7ce74; border: 2px solid #f7ce74; padding: 2px 8px; border-radius: 6px; cursor: pointer; font-size: 14px; font-family: inherit; font-weight: bold; transition: all 0.2s; }
-.toggle-btn:hover { background-color: #f7ce74; color: #1a1a1a; }
+.logic-canvas {
+  padding-bottom: 8px;
+}
+
+.top-insert {
+  position: relative;
+  height: 14px;
+}
+
+.element-wrapper {
+  margin-bottom: 8px;
+  position: relative;
+  transition: opacity 0.2s;
+  box-sizing: border-box !important;
+}
+
+.element-wrapper.is-locked-connected-next {
+  margin-bottom: 0 !important;
+}
+
+/* Изменяем курсор мыши на стандартный для блоков, заблокированных на перемещение */
+.element-wrapper.is-drag-locked :deep(.header) {
+  cursor: default !important;
+}
+.element-wrapper.is-drag-locked :deep(.header:active) {
+  cursor: default !important;
+}
+
+.ghost-item {
+  opacity: 0.6 !important;
+  filter: drop-shadow(0 0 5px rgba(140, 107, 237, 0.4));
+  outline: 2px dashed #8c6bed !important;
+  outline-offset: -2px;
+}
+
+:deep(.toolbars) {
+  position: sticky;
+  top: var(--vp-nav-height, 64px);
+  z-index: 45;
+  background: var(--vp-c-bg);
+  padding-top: 6px;
+}
+
+:deep(.processor-block) {
+  outline: 2px solid transparent;
+  outline-offset: 0px;
+  position: relative;
+  transition: outline 0.15s ease-out, outline-offset 0.15s ease-out, box-shadow 0.15s ease-out;
+}
+
+:deep(.processor-block.is-executing) {
+  outline: 2px solid #b8d8be !important;
+  outline-offset: 2px;
+  box-shadow: 0 0 10px rgba(184, 216, 190, 0.3);
+  z-index: 10;
+}
+
+:deep(.processor-block.is-template-executing) {
+  outline-color: rgba(184, 216, 190, 0.4) !important;
+}
+
+:deep(.processor-block::after) {
+  content: '';
+  position: absolute;
+  top: -2px;
+  left: -2px;
+  right: -2px;
+  bottom: -2px;
+  border: 2px solid white;
+  pointer-events: none;
+  clip-path: inset(0 calc(100% - var(--progress, 0%)) 0 0);
+  opacity: 0;
+  transition: clip-path 0.05s linear, opacity 0.2s ease-out;
+  z-index: 1;
+}
+
+:deep(.processor-block.is-template-executing::after) {
+  opacity: 1;
+}
+
+.is-arrow-dragging, .is-arrow-dragging * {
+  cursor: grabbing !important;
+}
+
+:deep(.is-drop-target) {
+  outline: 2px #f7ce74 !important;
+  outline-offset: 3px;
+  box-shadow: 0 0 10px rgba(247, 206, 116, 0.5);
+}
+
+/* Стилизация выделенного блока в игровом пиксельном стиле */
+/* Используем outline вместо border, чтобы избежать изменения размеров и дергания верстки при выделении */
+:deep(.processor-block.is-selected-block) {
+  outline: 3px dashed #8c6bed !important;
+  outline-offset: -3px; /* Сдвиг внутрь, сохраняет исходные размеры элемента */
+  background-color: rgba(140, 107, 237, 0.08) !important;
+  border-radius: 0 !important;
+  box-shadow: 0 0 10px rgba(140, 107, 237, 0.3) !important;
+}
+
+:deep(.is-label) {
+  filter: saturate(0.5);
+}
+
+.params-row {
+  display: flex;
+  gap: 12px;
+  flex-wrap: wrap;
+  padding: 4px;
+}
+
+.param-box {
+  display: flex;
+  align-items: center;
+}
+
+.param-label {
+  font-size: 18px;
+  font-family: inherit;
+}
+
+.param-input {
+  font-family: inherit;
+  background: transparent;
+  border: none;
+  border-bottom: 4px solid #888;
+  color: white;
+  padding: 2px;
+  font-size: 18px;
+  margin-left: 6px;
+  outline: none;
+  min-width: 40px;
+  max-width: 140px;
+  opacity: 0.8;
+}
+
+.param-input:disabled {
+  cursor: not-allowed;
+  opacity: 0.5;
+  border-bottom-color: #555 !important;
+}
+
+.jump-dest-input {
+  border-bottom-color: #f7ce74 !important;
+  width: 50px;
+  color: #f7ce74;
+  font-weight: bold;
+}
+
+.custom-select-wrapper {
+  position: relative;
+}
+
+.disabled-trigger {
+  cursor: not-allowed !important;
+  opacity: 0.5;
+  border-bottom-color: #555 !important;
+}
+
+.enum-popup {
+  position: absolute;
+  top: 100%;
+  left: 0;
+  margin-top: 4px;
+  background: #000;
+  border: 4px solid #4a4a4a;
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  z-index: 100;
+  min-width: 180px;
+}
+
+.enum-option {
+  font-family: inherit;
+  color: #fff;
+  padding: 8px;
+  cursor: pointer;
+  text-align: center;
+}
+
+.enum-option:hover {
+  background: rgba(255, 255, 255, 0.1);
+}
+
+.enum-option.is-selected {
+  background: #f7ce74;
+}
+
+.vars-fullscreen-overlay {
+  position: fixed;
+  top: 0;
+  left: 0;
+  width: 100vw;
+  height: 100vh;
+  background-color: rgba(15, 15, 15, 0.95);
+  z-index: 9999;
+  display: flex;
+  flex-direction: column;
+  backdrop-filter: blur(5px);
+}
+
+.multi-drag-image-container {
+  position: absolute;
+  top: -9999px;
+  left: -9999px;
+  z-index: -9999;
+  opacity: 1;
+  pointer-events: none;
+}
+
+:deep(.multi-drag-badge) {
+  font-family: inherit;
+  position: absolute;
+  bottom: -15px;
+  right: -15px;
+  background-color: #f7ce74;
+  color: #1a1a1a;
+  font-weight: bold;
+  font-size: 16px;
+  padding: 4px 10px;
+  border-radius: 20px;
+  border: 3px solid #1a1a1a;
+}
+
+.sub-blocks-container {
+  width: 100%;
+  margin-top: 6px;
+  display: flex;
+  flex-direction: column;
+}
+
+.mini-logic-element {
+  margin: 2px 0 !important;
+  padding: 4px 6px !important;
+  font-size: 14px !important;
+  opacity: 0.9;
+}
+
+.mini-params-row {
+  gap: 8px !important;
+  padding: 0 !important;
+}
+
+.mini-params-row .param-label {
+  font-size: 14px;
+  font-family: inherit;
+}
+
+.mini-params-row .disabled-input {
+  font-size: 14px !important;
+  pointer-events: none;
+}
+
+.is-mini-executing {
+  opacity: 1;
+  transform: translateX(8px);
+  outline: 2px solid #b8d8be !important;
+}
+
+.template-controls {
+  margin-left: auto;
+  gap: 8px;
+}
+
+.toggle-btn {
+  font-family: inherit;
+  background-color: transparent;
+  color: #f7ce74;
+  border: 2px solid #f7ce74;
+  padding: 2px 8px;
+  border-radius: 6px;
+  cursor: pointer;
+  font-size: 14px;
+  transition: all 0.2s;
+}
+
+.toggle-btn:hover {
+  background-color: #f7ce74;
+  color: #1a1a1a;
+}
+
+.unwrap-btn {
+  color: #a38bf5;
+  border-color: #a38bf5;
+}
+
+.unwrap-btn:hover {
+  background-color: #a38bf5;
+  color: #1a1a1a;
+  box-shadow: 0 0 8px rgba(163, 139, 245, 0.4);
+}
+
+/* Сверхконтрастная ярко-золотая рамка залоченных блоков */
+.element-wrapper.is-locked-block {
+  border: 3px solid #f7ce74 !important;
+  padding: 6px !important; /* Паддинг между внешней рамкой и внутренним блоком */
+  background-color: #15151b !important;
+  box-sizing: border-box !important;
+}
+
+/* Сверхконтрастная серебристо-серая рамка для блоков с запретом перемещения (is-drag-locked) */
+.element-wrapper.is-drag-locked {
+  border: 3px solid #b0b0b5 !important;
+}
+
+/* Убираем рамки у внутреннего блока, если он залочен, чтобы избежать дублирования */
+.element-wrapper.is-locked-block :deep(.processor-block) {
+  border: none !important;
+  border-radius: 0 !important;
+}
+
+/* Слияние рамок (мультирамка) для соединенных залоченных блоков */
+.element-wrapper.is-locked-connected-next :deep(.processor-block) {
+  border-bottom: none !important;
+  margin-bottom: 0 !important;
+  border-bottom-left-radius: 0 !important;
+  border-bottom-right-radius: 0 !important;
+}
+
+.element-wrapper.is-locked-connected-prev :deep(.processor-block) {
+  border-top: none !important;
+  margin-top: 0 !important;
+  border-top-left-radius: 0 !important;
+  border-top-right-radius: 0 !important;
+}
+
+/* Стилизация блока задания (полые рамки без заливки фона) */
+.task-logic-wrapper {
+  margin-top: 24px;
+  margin-left: 8px;
+  margin-right: 8px;
+}
+
+.task-body {
+  font-family: 'MindustryLogic', monospace, serif;
+}
+
+.test-rows-container {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  margin-bottom: 10px;
+}
+
+.task-test-row {
+  display: flex;
+  align-items: baseline;
+  gap: 12px;
+  padding: 5px 10px;
+  border-left: 4px solid #55555f;
+  background-color: rgba(255, 255, 255, 0.03);
+  font-size: 16px;
+  transition: border-color 0.2s, background-color 0.2s;
+}
+
+.task-test-row.is-passed {
+  border-left-color: #b8d8be;
+  background-color: rgba(184, 216, 190, 0.07);
+}
+
+.test-status-symbol {
+  white-space: nowrap;
+  min-width: 68px;
+  font-size: 14px;
+  color: #8a8a95;
+}
+
+.task-test-row.is-passed .test-status-symbol {
+  color: #b8d8be;
+}
+
+.test-desc-text {
+  color: #e6e6ea;
+  flex: 1;
+  min-width: 0;
+}
+
+.test-row-value {
+  font-size: 13px;
+  color: #7c7c88;
+  white-space: nowrap;
+}
+
+.task-status-bar {
+  text-align: center;
+  font-size: 15px;
+  color: #15151b;
+  background-color: #f7ce74;
+  padding: 6px;
+}
+
+.task-status-bar.all-passed {
+  background-color: #b8d8be;
+}
+
+.task-saved-bar {
+  margin-top: 8px;
+  text-align: center;
+  font-size: 13px;
+  color: #b8d8be;
+  padding: 6px;
+}
 </style>

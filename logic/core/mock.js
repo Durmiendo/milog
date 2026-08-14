@@ -11,8 +11,10 @@ export class World {
             return null;
         }
 
+        const { link: requestedPrefix, ...initArgs } = args || {};
+
         const newBlock = this.impl[type]();
-        newBlock.init(args);
+        newBlock.init(initArgs);
 
         if (!this.blocks[type]) {
             this.blocks[type] = [];
@@ -21,9 +23,17 @@ export class World {
         this.blocks[type].push(newBlock);
         newBlock.id = this.blocks[type].length - 1;
 
-        this.asm.addLink(newBlock.name + newBlock.id, newBlock);
+        newBlock.link = this.nextLinkName(requestedPrefix || newBlock.linkPrefix || newBlock.name);
+
+        this.asm.addLink(newBlock.link, newBlock);
 
         return newBlock;
+    }
+
+    nextLinkName(prefix) {
+        let index = 1;
+        while (this.asm.links[prefix + index]) index++;
+        return prefix + index;
     }
 
     removeBlock(type, blockId) {
@@ -32,8 +42,8 @@ export class World {
         const index = this.blocks[type].findIndex(b => b.id === blockId);
 
         if (index !== -1) {
-            this.blocks[type].splice(index, 1);
-            this.asm.removeLink(type.name + blockId);
+            const [removed] = this.blocks[type].splice(index, 1);
+            if (removed?.link) this.asm.removeLink(removed.link);
             return true;
         }
         return false;
@@ -52,6 +62,7 @@ export class World {
             id: 0,
             type: 'membank',
             name: 'membank',
+            linkPrefix: 'cell',
             mock: { size: 64 },
             data:[],
 
@@ -86,6 +97,7 @@ export class World {
             id: 0,
             type: 'processor',
             name: 'processor',
+            linkPrefix: 'processor',
             mock: {},
             vm: null,
 
@@ -128,11 +140,13 @@ export class World {
             id: 0,
             type: 'logic_display',
             name: 'display',
+            linkPrefix: 'display',
             mock: { size: 176 },
 
             _canvas: null,
             _ctx: null,
             lastUpdate: 0,
+            lastCommands: [],
 
             init(args = {}) {
                 Object.assign(this.mock, args);
@@ -148,13 +162,15 @@ export class World {
             },
 
             flush(commands) {
-                if (!this._ctx) return "Error: No Context";
-
                 let cmds = commands;
                 if (typeof commands === 'string') {
                     try { cmds = JSON.parse(commands); } catch (e) { return "JSON Error"; }
                 }
                 if (!Array.isArray(cmds)) return "Invalid Commands";
+
+                this.lastCommands = cmds.slice();
+
+                if (!this._ctx) return "Error: No Context";
 
                 const ctx = this._ctx;
                 const size = this._canvas.height;
@@ -238,6 +254,7 @@ export class World {
             id: 0,
             type: 'message',
             name: 'message',
+            linkPrefix: 'message',
             mock: { text: "" },
 
             init(args = {}) {
@@ -255,6 +272,7 @@ export class World {
             id: 0,
             type: 'switch',
             name: 'switch',
+            linkPrefix: 'switch',
             mock: { enabled: false },
 
             init(args = {}) {

@@ -1,8 +1,12 @@
 <template>
   <div class="base">
     <div class="header">
-      <p v-if="props.type.command !== 'jump'" class="title">{{ title }}</p>
-      <p v-else class="title">{{ title }} -> {{props.type.jumpDest}}</p>
+      <p v-if="props.type.command !== 'jump'" class="title">
+        {{ title }} <span v-if="props.locked" class="lock-text">[LOCK]</span>
+      </p>
+      <p v-else class="title">
+        {{ title }} -> {{props.type.jumpDest}} <span v-if="props.locked" class="lock-text">[LOCK]</span>
+      </p>
 
       <div v-if="props.control" class="control">
         <p class="title">{{ index }}</p>
@@ -10,6 +14,9 @@
         <button class="addimg" @click.stop="$emit('add')"></button>
         <button class="copyimg" @click.stop="$emit('copy')"></button>
         <button class="exitimg" @click.stop="$emit('remove')"></button>
+      </div>
+      <div v-else class="control">
+        <p class="title">{{ index }}</p>
       </div>
     </div>
     <div class="code">
@@ -19,7 +26,7 @@
 </template>
 
 <script setup>
-import {cats, all} from "./sttms.js";
+import {all, cats} from "../../core/sttms";
 
 const props = defineProps({
   title: { type: String, default: 'none' },
@@ -30,11 +37,10 @@ const props = defineProps({
       command: all.objs[0],
       category: cats.unknown,
       params: []
-  }},
+    }},
   control: { type: Boolean, default: true },
+  locked: { type: Boolean, default: false }
 });
-
-
 </script>
 
 <style scoped>
@@ -56,6 +62,13 @@ const props = defineProps({
 
 .title {
   margin: 0;
+  color: rgba(0, 0, 0, 0.78);
+}
+
+.lock-text {
+  font-size: 14px;
+  color: rgba(0, 0, 0, 0.5);
+  margin-left: 8px;
 }
 
 .control {
@@ -103,11 +116,7 @@ const props = defineProps({
   font-size: 18px;
   font-weight: 900;
   background-color: v-bind('props.color');
-  text-shadow:
-      1px   1px 1px black,
-      -1px  1px 1px black,
-      -1px -1px 1px black,
-      1px  -1px 1px black;
+  text-shadow: none;
 
   color: v-bind('props.color');
   padding: 6px;
@@ -115,12 +124,11 @@ const props = defineProps({
   margin: 8px;
 }
 
-
 .code {
   padding: 6px;
   background-color: black;
+  color: #fff;
 }
-
 
 .jump-node-out {
   width: 12px;

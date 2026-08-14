@@ -66,6 +66,10 @@ export class Parser {
         let tokens =[];
         let expectNext = false;
 
+        let lockMove = false;
+        let lockEdit = false;
+        let lockConnect = false;
+
         while (this.pos < this.chars.length) {
             let c = this.chars[this.pos];
 
@@ -79,8 +83,38 @@ export class Parser {
             expectNext = false;
 
             if (c === '#') {
+                const commentSubstring = this.chars.substring(this.pos, this.pos + 40).toLowerCase();
+                if (commentSubstring.startsWith('#locked')) {
+                    lockMove = true;
+                    lockEdit = true;
+                    lockConnect = true;
+                } else if (commentSubstring.startsWith('#lock')) {
+                    const hasMove = commentSubstring.includes('move');
+                    const hasEdit = commentSubstring.includes('edit');
+                    const hasConnect = commentSubstring.includes('connect');
+
+                    if (!hasMove && !hasEdit && !hasConnect) {
+                        lockEdit = true;
+                    } else {
+                        if (hasMove) lockMove = true;
+                        if (hasEdit) lockEdit = true;
+                        if (hasConnect) lockConnect = true;
+                    }
+                }
                 this.comment();
                 break;
+            } else if (c === '[') {
+                // Токенизация списков выбора внутри скобок []
+                let from = this.pos;
+                let depth = 1;
+                this.pos++;
+                while (this.pos < this.chars.length && depth > 0) {
+                    if (this.chars[this.pos] === '[') depth++;
+                    if (this.chars[this.pos] === ']') depth--;
+                    this.pos++;
+                }
+                tokens.push(this.chars.substring(from, this.pos));
+                expectNext = true;
             } else if (c === '"') {
                 tokens.push(this.readString());
                 expectNext = true;
@@ -105,6 +139,9 @@ export class Parser {
                 this.jumpLocations[labelName] = this.line;
 
                 const item = this.createItemObject('label', [labelName]);
+                if (lockMove) item.lockMove = true;
+                if (lockEdit) item.lockEdit = true;
+                if (lockConnect) item.lockConnect = true;
                 this.statements.push(item);
                 this.line++;
             } else {
@@ -123,6 +160,9 @@ export class Parser {
                 }
 
                 const item = this.createItemObject(tokens[0], tokens.slice(1));
+                if (lockMove) item.lockMove = true;
+                if (lockEdit) item.lockEdit = true;
+                if (lockConnect) item.lockConnect = true;
 
                 if (wasJumpLabel) {
                     this.pendingJumps.push({ item, label: jumpLabel });
@@ -173,6 +213,35 @@ export class Parser {
     }
 
     createItemObject(cmd, args) {
+        // Перехват и правильное создание структуры параметров шаблона 'choice'
+        if (cmd === 'choice') {
+            const options = args[0] ? args[0].slice(1, -1).split('|').map(s => s.trim()) : [];
+            return {
+                id: Math.random().toString(36).substring(2, 11),
+                command: 'choice',
+                category: cats.control,
+                _collapsed: false,
+                params: [
+                    { label: 'selected', type: 'number', value: '0' },
+                    { label: 'options', type: 'array', value: options }
+                ]
+            };
+        }
+
+        // Перехват и правильное создание структуры параметров шаблона 'math'
+        if (cmd === 'math') {
+            return {
+                id: Math.random().toString(36).substring(2, 11),
+                command: 'math',
+                category: cats.template,
+                _collapsed: false,
+                params: [
+                    { label: 'target', type: 'text', value: args[0] || 'result' },
+                    { label: 'expr', type: 'text', value: args[1] || '' }
+                ]
+            };
+        }
+
         let def = all?.objs?.find(o => o.name === cmd);
 
         if (cmd === 'label' && !def) {
@@ -187,7 +256,7 @@ export class Parser {
         let jumpDest = isJump ? parseInt(args[0]) : null;
         let actualArgs = isJump ? args.slice(1) : args;
 
-        return {
+        const item = {
             id: Math.random().toString(36).substring(2, 11),
             command: cmd,
             jumpDest: jumpDest,
@@ -200,5 +269,19 @@ export class Parser {
                 options: p.values
             })) : actualArgs.map((a, i) => ({ label: 'arg' + i, value: a, type: 'string' }))
         };
+
+        // НА СТРОЧНОМ УРОВНЕ: Превращаем любой параметр с синтаксисом [choice: A | B] в выпадающий список
+        item.params.forEach(p => {
+            const valStr = String(p.value).trim();
+            if (valStr.startsWith('[choice:') && valStr.endsWith(']')) {
+                const choices = valStr.slice(8, -1).split('|').map(s => s.trim());
+                p.type = 'enum';
+                p.options = choices;
+                p.value = choices[0];
+                p.isChoice = true; // Важнейший флаг для сохранения интерактивности при локе
+            }
+        });
+
+        return item;
     }
 }

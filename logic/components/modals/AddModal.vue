@@ -1,6 +1,6 @@
 <script setup>
-import { ref, computed, onMounted } from 'vue';
-import { cats, all } from './sttms.js';
+import { ref, computed, onMounted, onUnmounted } from 'vue';
+import { cats, all } from '../../core/sttms.js';
 
 const emit = defineEmits(['select', 'close']);
 
@@ -32,7 +32,6 @@ const groupedCommands = computed(() => {
     });
   }
 
-
   allObjs.forEach(cmd => {
     if (cmd.name.toLowerCase().includes(query)) {
       if (!groups[cmd.category]) {
@@ -45,7 +44,7 @@ const groupedCommands = computed(() => {
   return categoryOrder.map(catKey => ({
     key: catKey,
     meta: cats[catKey] || { name: 'Unknown', color: '#777777' },
-    commands: groups[catKey] ||[]
+    commands: groups[catKey] || []
   })).filter(group => group.commands.length > 0);
 });
 
@@ -53,8 +52,19 @@ const selectCommand = (cmdName) => {
   emit('select', cmdName);
 };
 
+const handleGlobalKeydown = (e) => {
+  if (e.key === 'Escape') {
+    emit('close');
+  }
+};
+
 onMounted(() => {
   searchInputRef.value?.focus();
+  window.addEventListener('keydown', handleGlobalKeydown);
+});
+
+onUnmounted(() => {
+  window.removeEventListener('keydown', handleGlobalKeydown);
 });
 </script>
 
@@ -177,7 +187,6 @@ onMounted(() => {
   padding: 10px 20px 20px;
 }
 
-/* Кастомный скроллбар */
 .categories-scroll::-webkit-scrollbar {
   width: 8px;
 }
@@ -239,7 +248,6 @@ onMounted(() => {
   box-shadow: 0 0 12px var(--c);
   transform: translateY(-2px);
 }
-
 
 .cmd-btn:active {
   transform: translateY(0);

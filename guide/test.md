@@ -1,10 +1,12 @@
 ---
-title: Основы работы с нашим API
-description: Базовое руководство по авторизации и первым запросам
+title: Тестовая страница
+description: Описание
 outline: deep
 aside: false
+hidden: true
 ---
 
+<!-- Первый независимый процессор (без моков) -->
 <Proc :drag="true">
 <pre>
 set result 0
@@ -14,6 +16,56 @@ set result 1000
 </Proc>
 
 
+# Задание: Закрасьте квадрат
+
+<!-- Оборачиваем блок World внутрь компонента Proc, чтобы смонтировать симулятор -->
+<Proc :drag="true">
+<World>
+
+```mock
+membank size:64
+logic_display size:176
+message
+```
+
+```code
+set result 0 #lock
+op add result result 10
+print "Ответ " #lock
+print result
+printflush message1 #lock
+printflush message1 #locked
+printflush message1 #locked
+noop
+noop
+print [choice: "frog" | "cat" | result] #lock
+choice [print "hello" | print "world" | set result 100] #lock
+```
+
+```tests
+limit wcet 100 <"Превышен лимит тактов процессора">;
+limit instruct 30 <"Код слишком длинный">;
+limit add_block false;  
+
+req mock display commands contains [rect] <"Дисплей не закрашен">;
+req mock message1 text equals "Ответ 10" <"Ответ не совпадает с ожидаемым">;
+```
+
+</World>
+</Proc>
+
+1
+2
+3
+4
+5
+1
+2
+3
+4
+5
+
+<!-- Третий независимый процессор со списком всех команд -->
 <Proc :drag="true">
 
 <pre>
@@ -153,4 +205,3 @@ let a = 1;
 return a; 
 }
 ```
-
